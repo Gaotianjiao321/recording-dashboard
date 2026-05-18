@@ -32,7 +32,7 @@ async function serveStatic(request, response) {
 }
 
 export async function createApp(options = {}) {
-  const db = options.db ?? new Database(options.dbPath);
+  const db = options.db ?? new Database(options.dbPath ?? process.env.DATABASE_PATH);
   await db.init();
 
   return async function app(request, response) {
