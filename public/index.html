@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Recording Dashboard</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">Local Mac MVP</p>
+          <h1>Recording Dashboard</h1>
+        </div>
+        <button id="refresh" type="button">Refresh</button>
+      </header>
+
+      <section class="stats" aria-label="Today stats">
+        <article><span id="recordings">0</span><small>Recordings</small></article>
+        <article><span id="processing">0</span><small>Processing</small></article>
+        <article><span id="pending">0</span><small>Pending tasks</small></article>
+      </section>
+
+      <section>
+        <h2>Latest Summary</h2>
+        <p id="summary" class="summary">No processed recordings yet.</p>
+      </section>
+
+      <section class="grid">
+        <div>
+          <h2>Pending Tasks</h2>
+          <ul id="tasks"></ul>
+        </div>
+        <div>
+          <h2>Decisions</h2>
+          <ul id="decisions"></ul>
+        </div>
+        <div>
+          <h2>Open Questions</h2>
+          <ul id="questions"></ul>
+        </div>
+      </section>
+    </main>
+    <script src="/main.js"></script>
+  </body>
+</html>

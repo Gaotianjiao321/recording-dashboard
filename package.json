@@ -1,0 +1,14 @@
+{
+  "name": "recording-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node src/index.js",
+    "test": "node --test",
+    "ai-check": "node --test"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
