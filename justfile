@@ -1,0 +1,3 @@
+ai-check:
+	pnpm check
+

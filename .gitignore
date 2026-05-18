@@ -1,0 +1,10 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+data/*.sqlite
+data/*.sqlite-*
+recordings/*.wav
+recordings/*.mp3
+.DS_Store
+.env
