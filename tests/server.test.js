@@ -35,10 +35,15 @@ test("HTTP API processes a recording and exposes dashboard state", async () => {
       body: JSON.stringify({ path: "recordings/api.wav" })
     });
     assert.equal(processResponse.status, 201);
+    const processResult = await processResponse.json();
 
     const dashboard = await (await fetch(`${baseUrl}/api/dashboard/today`)).json();
     assert.equal(dashboard.stats.recordings, 1);
     assert.equal(dashboard.tasks[0].status, "pending_confirm");
+
+    const statusResponse = await fetch(`${baseUrl}/api/processing/${processResult.jobId}/status`);
+    assert.equal(statusResponse.status, 200);
+    assert.equal((await statusResponse.json()).status, "succeeded");
 
     const confirmResponse = await fetch(`${baseUrl}/api/tasks/${dashboard.tasks[0].id}/confirm`, {
       method: "POST"

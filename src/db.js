@@ -32,6 +32,8 @@ export class Database {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         recording_id INTEGER NOT NULL,
         status TEXT NOT NULL,
+        current_step TEXT,
+        progress REAL NOT NULL DEFAULT 0,
         error TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -44,6 +46,8 @@ export class Database {
         position INTEGER NOT NULL,
         start_seconds REAL NOT NULL,
         end_seconds REAL NOT NULL,
+        file_size_bytes INTEGER NOT NULL DEFAULT 0,
+        transcription_status TEXT NOT NULL DEFAULT 'pending',
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(recording_id) REFERENCES recordings(id)
       );
@@ -60,6 +64,7 @@ export class Database {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         recording_id INTEGER NOT NULL,
         summary TEXT NOT NULL,
+        raw_json TEXT NOT NULL DEFAULT '{}',
         waiting_for_others TEXT NOT NULL DEFAULT '[]',
         decisions TEXT NOT NULL DEFAULT '[]',
         open_questions TEXT NOT NULL DEFAULT '[]',
@@ -71,7 +76,12 @@ export class Database {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         recording_id INTEGER NOT NULL,
         title TEXT NOT NULL,
+        category TEXT NOT NULL DEFAULT 'my_todo',
         status TEXT NOT NULL,
+        deadline TEXT,
+        priority TEXT,
+        who TEXT,
+        context TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(recording_id) REFERENCES recordings(id)
       );

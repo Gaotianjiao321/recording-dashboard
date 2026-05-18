@@ -37,30 +37,31 @@ test("processes recording through save, chunk, transcribe, parse, dashboard, and
     }
   });
 
-  assert.equal(result.parsed.my_todos[0], "send plan");
+  assert.equal(result.parsed.my_todos[0].content, "send plan");
 
   const dashboard = await getTodayDashboard(db);
   assert.equal(dashboard.stats.recordings, 1);
   assert.equal(dashboard.stats.pendingTasks, 1);
   assert.equal(dashboard.latest.summary.includes("Team sync"), true);
-  assert.deepEqual(dashboard.latest.decisions, ["ship local MVP"]);
+  assert.deepEqual(dashboard.latest.decisions.map((item) => item.content), ["ship local MVP"]);
   assert.equal(notifications.length, 1);
   assert.equal(notifications[0].body.includes("send plan"), true);
 });
 
 test("supports short, long, and silent-like boundary recordings", async () => {
   const cases = [
-    { name: "short", duration: 4, chunks: [{ filePath: "short.mp3", position: 0, startSeconds: 0, endSeconds: 4 }] },
+    { name: "short", duration: 4, expectedPending: 1, chunks: [{ filePath: "short.mp3", position: 0, startSeconds: 0, endSeconds: 4 }] },
     {
       name: "long",
       duration: 1250,
+      expectedPending: 1,
       chunks: [
         { filePath: "long-0.mp3", position: 0, startSeconds: 0, endSeconds: 600 },
         { filePath: "long-1.mp3", position: 1, startSeconds: 595, endSeconds: 1195 },
         { filePath: "long-2.mp3", position: 2, startSeconds: 1190, endSeconds: 1250 }
       ]
     },
-    { name: "silent", duration: 30, chunks: [{ filePath: "silent.mp3", position: 0, startSeconds: 0, endSeconds: 30 }] }
+    { name: "silent", duration: 30, expectedPending: 1, chunks: [{ filePath: "silent.mp3", position: 0, startSeconds: 0, endSeconds: 30 }] }
   ];
 
   for (const item of cases) {
@@ -74,7 +75,7 @@ test("supports short, long, and silent-like boundary recordings", async () => {
     const dashboard = await getTodayDashboard(db);
     assert.equal(dashboard.recordings[0].duration_seconds, item.duration);
     assert.equal(dashboard.stats.recordings, 1);
-    assert.equal(dashboard.stats.pendingTasks, item.chunks.length);
+    assert.equal(dashboard.stats.pendingTasks, item.expectedPending);
   }
 });
 

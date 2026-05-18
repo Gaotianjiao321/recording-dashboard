@@ -2,7 +2,7 @@ import { createReadStream } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { Database } from "./db.js";
-import { getTodayDashboard, processRecording, updateTaskStatus } from "./pipeline.js";
+import { getTodayDashboard, processRecording, retryProcessingJob, updateTaskStatus } from "./pipeline.js";
 
 const contentTypes = {
   ".css": "text/css",
@@ -52,6 +52,17 @@ export async function createApp(options = {}) {
 
       if (request.method === "GET" && url.pathname === "/api/dashboard/today") {
         return sendJson(response, 200, await getTodayDashboard(db));
+      }
+
+      const processingMatch = url.pathname.match(/^\/api\/processing\/(\d+)\/(status|retry)$/);
+      if (processingMatch?.[2] === "status" && request.method === "GET") {
+        const job = await db.get(`SELECT * FROM processing_jobs WHERE id = ${Number(processingMatch[1])}`);
+        if (!job) return sendJson(response, 404, { error: "processing job not found" });
+        return sendJson(response, 200, job);
+      }
+
+      if (processingMatch?.[2] === "retry" && request.method === "POST") {
+        return sendJson(response, 200, await retryProcessingJob(db, Number(processingMatch[1]), options.services));
       }
 
       const taskMatch = url.pathname.match(/^\/api\/tasks\/(\d+)\/(confirm|dismiss)$/);

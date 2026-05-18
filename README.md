@@ -14,7 +14,6 @@ Backend foundation for the Mac recording dashboard MVP.
 ## Commands
 
 ```bash
-npm install
 npm run dev
 just ai-check
 ```
@@ -22,15 +21,13 @@ just ai-check
 ## Environment
 
 ```bash
-DATABASE_PATH=./data/recording-dashboard.sqlite
-RECORDINGS_DIR=./recordings
-FFMPEG_BIN=ffmpeg
-FFPROBE_BIN=ffprobe
+MAX_CHUNK_BYTES=26214400
 
 TENCENT_SECRET_ID=...
 TENCENT_SECRET_KEY=...
 TENCENT_REGION=ap-guangzhou
 TENCENT_ASR_ENGINE=16k_zh
+TENCENT_ASR_TIMEOUT_MS=900000
 
 ANTHROPIC_API_KEY=...
 ANTHROPIC_MODEL=claude-3-5-sonnet-latest

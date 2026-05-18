@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir } from "node:fs/promises";
+import { mkdir, stat } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import { promisify } from "node:util";
 
@@ -21,6 +21,7 @@ export async function getAudioDurationSeconds(filePath) {
 export async function chunkAudio(filePath, options = {}) {
   const chunkSeconds = options.chunkSeconds ?? 600;
   const overlapSeconds = options.overlapSeconds ?? 5;
+  const maxChunkBytes = options.maxChunkBytes ?? Number(process.env.MAX_CHUNK_BYTES ?? 25 * 1024 * 1024);
   const outputDir = options.outputDir ?? "recordings/chunks";
   const durationSeconds = await getAudioDurationSeconds(filePath);
   const chunks = [];
@@ -51,7 +52,12 @@ export async function chunkAudio(filePath, options = {}) {
       outputPath
     ]);
 
-    chunks.push({ filePath: outputPath, position, startSeconds: start, endSeconds: end });
+    const fileSizeBytes = (await stat(outputPath)).size;
+    if (fileSizeBytes > maxChunkBytes) {
+      throw new Error(`chunk ${position} exceeds ASR limit: ${fileSizeBytes} > ${maxChunkBytes} bytes`);
+    }
+
+    chunks.push({ filePath: outputPath, position, startSeconds: start, endSeconds: end, fileSizeBytes });
     if (end >= durationSeconds) break;
     start = Math.max(end - overlapSeconds, start + 1);
   }
