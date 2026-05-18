@@ -4,6 +4,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { parseTranscriptHeuristically } from "../src/parser.js";
 import { createApp } from "../src/server.js";
 
 async function listen(app) {
@@ -23,6 +24,7 @@ test("HTTP API processes a recording and exposes dashboard state", async () => {
         chunks: [{ filePath: "api-chunk.mp3", position: 0, startSeconds: 0, endSeconds: 20 }]
       }),
       transcriber: async () => "TODO: call Alice. Decision: publish dashboard.",
+      parser: parseTranscriptHeuristically,
       notifier: async () => {}
     }
   });

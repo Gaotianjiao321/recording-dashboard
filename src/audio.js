@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 
 export async function getAudioDurationSeconds(filePath) {
-  const { stdout } = await execFileAsync("ffprobe", [
+  const { stdout } = await execFileAsync(process.env.FFPROBE_BIN ?? "ffprobe", [
     "-v",
     "error",
     "-show_entries",
@@ -21,7 +21,7 @@ export async function getAudioDurationSeconds(filePath) {
 export async function chunkAudio(filePath, options = {}) {
   const chunkSeconds = options.chunkSeconds ?? 600;
   const overlapSeconds = options.overlapSeconds ?? 5;
-  const outputDir = options.outputDir ?? "recordings/chunks";
+  const outputDir = options.outputDir ?? join(process.env.RECORDINGS_DIR ?? "recordings", "chunks");
   const durationSeconds = await getAudioDurationSeconds(filePath);
   const chunks = [];
   const baseName = basename(filePath, extname(filePath));
@@ -36,7 +36,7 @@ export async function chunkAudio(filePath, options = {}) {
     const end = Math.min(start + chunkSeconds, durationSeconds);
     const outputPath = join(outputDir, `${baseName}-${String(position).padStart(3, "0")}.mp3`);
 
-    await execFileAsync("ffmpeg", [
+    await execFileAsync(process.env.FFMPEG_BIN ?? "ffmpeg", [
       "-y",
       "-v",
       "error",

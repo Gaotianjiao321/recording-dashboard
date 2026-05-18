@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Database } from "../src/db.js";
+import { parseTranscriptHeuristically } from "../src/parser.js";
 import { getTodayDashboard, processRecording, updateTaskStatus } from "../src/pipeline.js";
 
 async function createTestDb() {
@@ -32,6 +33,7 @@ test("processes recording through save, chunk, transcribe, parse, dashboard, and
       chunk.position === 0
         ? "Team sync. TODO: send plan. Decision: ship local MVP."
         : "Question: verify notification copy. Idea: add weekly trend.",
+    parser: parseTranscriptHeuristically,
     notifier: async (notification) => {
       notifications.push(notification);
     }
@@ -68,6 +70,7 @@ test("supports short, long, and silent-like boundary recordings", async () => {
     await processRecording(db, `${item.name}.wav`, {
       chunker: fakeChunker(item.chunks, item.duration),
       transcriber: async () => (item.name === "silent" ? "" : "TODO: boundary check"),
+      parser: parseTranscriptHeuristically,
       notifier: async () => {}
     });
 
@@ -124,6 +127,7 @@ test("task confirmation state machine supports confirmed and dismissed", async (
   await processRecording(db, "task.wav", {
     chunker: fakeChunker([{ filePath: "chunk.mp3", position: 0, startSeconds: 0, endSeconds: 10 }]),
     transcriber: async () => "TODO: confirm me",
+    parser: parseTranscriptHeuristically,
     notifier: async () => {}
   });
 
