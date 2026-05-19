@@ -23,6 +23,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   background:
@@ -1040,6 +1044,10 @@ h1 {
 }
 
 /* Drop Overlay */
+.drop-overlay[hidden] {
+  display: none;
+}
+
 .drop-overlay {
   align-items: center;
   background: rgba(91, 61, 240, 0.15);
