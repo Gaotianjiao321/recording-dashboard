@@ -137,9 +137,16 @@
             </label>
           </div>
           <label for="task-project">项目归属</label>
-          <div class="project-picker">
+          <div id="project-select-container" class="project-picker">
             <select id="task-project"></select>
             <button id="new-project" class="mini-btn" type="button">新建项目</button>
+          </div>
+          <div id="new-project-form" class="project-picker" hidden>
+            <input id="new-project-input" type="text" placeholder="输入新项目名称" />
+            <div style="display:flex;gap:8px;">
+              <button id="new-project-submit" class="mini-btn" type="button">确定</button>
+              <button id="new-project-cancel" class="mini-btn secondary" type="button">取消</button>
+            </div>
           </div>
         </div>
         <div class="modal-footer">

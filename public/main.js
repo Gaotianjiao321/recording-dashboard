@@ -29,7 +29,12 @@ const selectors = {
   taskPriority: "#task-priority",
   taskDueDate: "#task-due-date",
   taskProject: "#task-project",
+  projectSelectContainer: "#project-select-container",
   newProject: "#new-project",
+  newProjectForm: "#new-project-form",
+  newProjectInput: "#new-project-input",
+  newProjectSubmit: "#new-project-submit",
+  newProjectCancel: "#new-project-cancel",
   modalClose: "#modal-close",
   modalCancel: "#modal-cancel",
   modalSubmit: "#modal-submit"
@@ -166,9 +171,7 @@ function renderBoard(data, filter) {
 
 function renderProjects(data) {
   const projectBoard = document.querySelector(selectors.projectBoard);
-  const groups = Array.isArray(data.projects) && data.projects.length
-    ? data.projects
-    : groupTasksByProject(Array.isArray(data.tasks) ? data.tasks : []);
+  const groups = Array.isArray(data.projects) ? data.projects : [];
 
   if (!groups.length) {
     const empty = document.createElement("div");
@@ -204,30 +207,6 @@ function renderProjects(data) {
       return section;
     })
   );
-}
-
-function groupTasksByProject(tasks) {
-  const groups = new Map();
-  for (const task of tasks) {
-    const name = task.project || "未归属";
-    if (!groups.has(name)) {
-      groups.set(name, {
-        name,
-        total: 0,
-        pendingTasks: 0,
-        inProgressTasks: 0,
-        doneTasks: 0,
-        tasks: []
-      });
-    }
-    const group = groups.get(name);
-    group.total += 1;
-    if (task.status === "pending_confirm") group.pendingTasks += 1;
-    if (task.status === "in_progress") group.inProgressTasks += 1;
-    if (task.status === "done") group.doneTasks += 1;
-    group.tasks.push(task);
-  }
-  return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
 }
 
 function createTaskCard(task) {
@@ -721,25 +700,43 @@ async function loadProjects(selected = "") {
   }
 }
 
-async function createProjectFromPrompt() {
-  const name = window.prompt("请输入新项目名称");
-  const normalizedName = name?.trim();
-  if (!normalizedName) return;
+function showNewProjectForm() {
+  document.querySelector(selectors.projectSelectContainer).hidden = true;
+  document.querySelector(selectors.newProjectForm).hidden = false;
+  document.querySelector(selectors.newProjectInput).focus();
+}
+
+function hideNewProjectForm() {
+  document.querySelector(selectors.newProjectForm).hidden = true;
+  document.querySelector(selectors.projectSelectContainer).hidden = false;
+  document.querySelector(selectors.newProjectInput).value = "";
+}
+
+async function submitNewProject() {
+  const input = document.querySelector(selectors.newProjectInput);
+  const name = input.value.trim();
+  if (!name) return;
+
+  const btn = document.querySelector(selectors.newProjectSubmit);
+  btn.disabled = true;
 
   try {
     const response = await fetch("/api/projects", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: normalizedName })
+      body: JSON.stringify({ name })
     });
     const payload = await readJsonResponse(response);
     if (!response.ok) throw new Error(payload.error || "新建项目失败");
     if (!state.projects.includes(payload.name)) state.projects.push(payload.name);
     state.projects.sort((a, b) => a.localeCompare(b, "zh-CN"));
     renderProjectOptions(payload.name);
+    hideNewProjectForm();
   } catch (error) {
     document.querySelector(selectors.boardStatus).textContent = error.message || "新建项目失败";
     console.error(error);
+  } finally {
+    btn.disabled = false;
   }
 }
 
@@ -891,12 +888,17 @@ async function openModal(task = null) {
   renderProjectOptions(task?.project || "");
   document.querySelector(selectors.modalSubmit).textContent = isEditing ? "保存" : "添加";
   document.querySelector(selectors.taskTitle).focus();
-  await loadProjects(task?.project || "");
+  if (!state.projects.length) {
+    await loadProjects(task?.project || "");
+  } else {
+    loadProjects(task?.project || ""); // fetch in background
+  }
 }
 
 function closeModal() {
   document.querySelector(selectors.taskModal).hidden = true;
   state.editingTaskId = null;
+  hideNewProjectForm();
 }
 
 document.querySelector(selectors.refresh).addEventListener("click", () => {
@@ -913,7 +915,13 @@ document.querySelector(selectors.autoRefresh).addEventListener("change", () => {
     : "自动刷新已关闭";
 });
 document.querySelector(selectors.addTaskButton).addEventListener("click", () => openModal());
-document.querySelector(selectors.newProject).addEventListener("click", createProjectFromPrompt);
+document.querySelector(selectors.newProject).addEventListener("click", showNewProjectForm);
+document.querySelector(selectors.newProjectCancel).addEventListener("click", hideNewProjectForm);
+document.querySelector(selectors.newProjectSubmit).addEventListener("click", submitNewProject);
+document.querySelector(selectors.newProjectInput).addEventListener("keydown", (e) => {
+  if (e.key === "Enter") submitNewProject();
+  if (e.key === "Escape") hideNewProjectForm();
+});
 document.querySelector(selectors.modalClose).addEventListener("click", closeModal);
 document.querySelector(selectors.modalCancel).addEventListener("click", closeModal);
 document.querySelector(selectors.modalSubmit).addEventListener("click", submitManualTask);
