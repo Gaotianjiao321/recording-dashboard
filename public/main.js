@@ -135,6 +135,7 @@ function createTaskCard(task) {
   const config = taskCardConfig(task);
   return {
     tag: config.tag,
+    tagIcon: config.tagIcon,
     tagClass: config.tagClass,
     title: task.title || "未命名任务",
     meta: task.project || `任务 #${task.id}`,
@@ -153,29 +154,32 @@ function taskCardConfig(task) {
   if (task.status === "in_progress") {
     return {
       tag: "进行中",
+      tagIcon: "🔄",
       tagClass: "tag-processing",
       avatar: "进",
       actions: [
-        { label: "完成", variant: "primary", status: "done" },
-        { label: "退回", variant: "ghost", status: "pending_confirm" }
+        { label: "✅ 完成", variant: "primary", status: "done" },
+        { label: "↩ 退回", variant: "ghost", status: "pending_confirm" }
       ]
     };
   }
   if (task.status === "done") {
     return {
       tag: "已完成",
+      tagIcon: "✅",
       tagClass: "tag-done",
       avatar: "完",
-      actions: [{ label: "重新打开", variant: "ghost", status: "in_progress" }]
+      actions: [{ label: "🔓 重新打开", variant: "ghost", status: "in_progress" }]
     };
   }
   return {
     tag: "待确认",
+    tagIcon: "⏳",
     tagClass: "tag-task",
     avatar: "待",
     actions: [
-      { label: "开始", variant: "primary", status: "in_progress" },
-      { label: "忽略", variant: "ghost", status: "dismissed" }
+      { label: "▶ 开始", variant: "primary", status: "in_progress" },
+      { label: "⏭ 忽略", variant: "ghost", status: "dismissed" }
     ]
   };
 }
@@ -183,6 +187,7 @@ function taskCardConfig(task) {
 function createProcessingCard(recording) {
   return {
     tag: "处理中",
+    tagIcon: "🔄",
     tagClass: "tag-processing",
     title: recordingTitle(recording, "录音正在转写或解析"),
     meta: `录音 #${recording.id}`,
@@ -195,6 +200,7 @@ function createProcessingCard(recording) {
 function createDoneCard(recording) {
   return {
     tag: "已处理",
+    tagIcon: "✅",
     tagClass: "tag-done",
     title: recordingTitle(recording, "录音已生成纪要"),
     meta: `录音 #${recording.id}`,
@@ -207,6 +213,7 @@ function createDoneCard(recording) {
 function createFailedRecordingCard(recording) {
   return {
     tag: "失败",
+    tagIcon: "❌",
     tagClass: "tag-note",
     title: recordingTitle(recording, "录音处理失败"),
     meta: `录音 #${recording.id}`,
@@ -227,7 +234,7 @@ function renderCard(card) {
 
   const tag = document.createElement("span");
   tag.className = `card-tag ${card.tagClass}`;
-  tag.textContent = card.tag;
+  tag.textContent = card.tagIcon ? `${card.tagIcon} ${card.tag}` : card.tag;
 
   const title = document.createElement("div");
   title.className = "card-title";
@@ -566,7 +573,7 @@ function recordingTitle(recording, fallback) {
 }
 
 function priorityText(priority) {
-  const labels = { high: "高优先级", medium: "中优先级", low: "低优先级" };
+  const labels = { high: "🔴 高优先级", medium: "🟡 中优先级", low: "🟢 低优先级" };
   return labels[priority] ?? labels.medium;
 }
 
@@ -634,11 +641,13 @@ function applyFilter(filter) {
     chip.classList.toggle("active", chip.dataset.filter === filter);
   });
 
+  const kpiGrid = document.querySelector(".kpi-grid");
   const board = document.querySelector(".board");
   const sidebar = document.querySelector(".sidebar");
   const columns = document.querySelectorAll(".column");
 
-  // Reset all visibility
+  // KPI cards always visible
+  kpiGrid.style.display = "";
   board.style.display = "";
   sidebar.style.display = "";
   columns.forEach((col) => { col.style.display = ""; });
