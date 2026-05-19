@@ -18,6 +18,7 @@ test("HTTP API processes a recording and exposes dashboard state", async () => {
   const dir = await mkdtemp(join(tmpdir(), "recording-dashboard-server-"));
   const app = await createApp({
     dbPath: join(dir, "server.sqlite"),
+    uploadDir: join(dir, "uploads"),
     services: {
       chunker: async () => ({
         durationSeconds: 20,
@@ -47,6 +48,17 @@ test("HTTP API processes a recording and exposes dashboard state", async () => {
     });
     assert.equal(confirmResponse.status, 200);
     assert.equal((await confirmResponse.json()).status, "confirmed");
+
+    const upload = new FormData();
+    upload.append("recording", new Blob(["fake wav bytes"], { type: "audio/wav" }), "meeting.wav");
+    const uploadResponse = await fetch(`${baseUrl}/api/recordings/process`, {
+      method: "POST",
+      body: upload
+    });
+    assert.equal(uploadResponse.status, 201);
+
+    const updatedDashboard = await (await fetch(`${baseUrl}/api/dashboard/today`)).json();
+    assert.equal(updatedDashboard.stats.recordings, 2);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

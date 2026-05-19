@@ -1,5 +1,9 @@
 const selectors = {
   refresh: "#refresh",
+  uploadInput: "#recording-upload",
+  uploadButton: "#upload-recording",
+  uploadStatus: "#upload-status",
+  autoRefresh: "#auto-refresh",
   lastUpdated: "#last-updated",
   boardStatus: "#board-status",
   recordings: "#recordings",
@@ -14,11 +18,23 @@ const selectors = {
   summary: "#summary",
   decisions: "#decisions",
   questions: "#questions",
+  notifications: "#notifications",
   completionBar: "#completion-bar"
 };
 
+const normalPollMs = 30_000;
+const activePollMs = 5_000;
+const allowedExtensions = new Set(["wav", "mp3", "m4a"]);
+const state = {
+  data: null,
+  isRefreshing: false,
+  isUploading: false,
+  pollTimer: null
+};
+
 async function refresh() {
-  const refreshButton = document.querySelector(selectors.refresh);
+  if (state.isRefreshing) return;
+  state.isRefreshing = true;
   setLoading(true);
 
   try {
@@ -28,16 +44,18 @@ async function refresh() {
     }
 
     const data = await response.json();
+    state.data = data;
     renderDashboard(data);
-    document.querySelector(selectors.boardStatus).textContent = "看板数据已同步";
+    document.querySelector(selectors.boardStatus).textContent = statusTextForPolling(data);
     document.querySelector(selectors.lastUpdated).textContent = `最近刷新 ${formatTime(new Date())}`;
   } catch (error) {
     document.querySelector(selectors.boardStatus).textContent = "看板数据加载失败";
     renderEmptyState("加载失败，请稍后重试。");
     console.error(error);
   } finally {
+    state.isRefreshing = false;
     setLoading(false);
-    refreshButton.blur();
+    scheduleAutoRefresh();
   }
 }
 
@@ -45,6 +63,7 @@ function renderDashboard(data) {
   const stats = data.stats ?? {};
   const tasks = Array.isArray(data.tasks) ? data.tasks : [];
   const recordings = Array.isArray(data.recordings) ? data.recordings : [];
+  const notifications = Array.isArray(data.notifications) ? data.notifications : [];
   const latest = data.latest ?? null;
 
   const pendingTasks = tasks.filter((task) => task.status === "pending_confirm");
@@ -66,6 +85,7 @@ function renderDashboard(data) {
   setText(selectors.summary, latest?.summary || "暂无已处理录音。");
   renderInsights(selectors.decisions, latest?.decisions, "暂无决策。");
   renderInsights(selectors.questions, latest?.open_questions, "暂无待解决问题。", "question");
+  renderNotifications(notifications);
 
   const total = Math.max(recordings.length, 1);
   const completionRate = Math.round((doneRecordings.length / total) * 100);
@@ -79,8 +99,11 @@ function createTaskCard(task) {
     title: task.title || "未命名任务",
     meta: `任务 #${task.id}`,
     avatar: "待",
-    points: "待确认",
-    progress: null
+    points: `录音 #${task.recording_id}`,
+    actions: [
+      { label: "确认", variant: "primary", taskId: task.id, onClick: () => updateTask(task.id, "confirm") },
+      { label: "忽略", variant: "ghost", taskId: task.id, onClick: () => updateTask(task.id, "dismiss") }
+    ]
   };
 }
 
@@ -92,7 +115,7 @@ function createProcessingCard(recording) {
     meta: `录音 #${recording.id}`,
     avatar: "进",
     points: formatDuration(recording.duration_seconds),
-    progress: 58
+    status: "处理中，自动刷新会临时加快到 5 秒"
   };
 }
 
@@ -146,6 +169,13 @@ function renderCard(card) {
   meta.append(left, id);
   article.append(tag, title);
 
+  if (card.status) {
+    const status = document.createElement("p");
+    status.className = "card-status";
+    status.textContent = card.status;
+    article.append(status);
+  }
+
   if (typeof card.progress === "number") {
     const progress = document.createElement("div");
     progress.className = "progress";
@@ -156,6 +186,22 @@ function renderCard(card) {
   }
 
   article.append(meta);
+
+  if (Array.isArray(card.actions) && card.actions.length) {
+    const actions = document.createElement("div");
+    actions.className = "card-actions";
+    for (const action of card.actions) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `card-action ${action.variant}`;
+      button.textContent = action.label;
+      if (action.taskId) button.dataset.taskId = String(action.taskId);
+      button.addEventListener("click", action.onClick);
+      actions.append(button);
+    }
+    article.append(actions);
+  }
+
   return article;
 }
 
@@ -188,6 +234,38 @@ function renderInsights(selector, items, emptyText, variant = "") {
   );
 }
 
+function renderNotifications(notifications) {
+  const list = document.querySelector(selectors.notifications);
+  const safeNotifications = notifications.filter((notification) => notification?.body || notification?.title);
+
+  if (!safeNotifications.length) {
+    const empty = document.createElement("p");
+    empty.className = "insight-empty";
+    empty.textContent = "暂无通知。";
+    list.replaceChildren(empty);
+    return;
+  }
+
+  list.replaceChildren(
+    ...safeNotifications.slice(0, 8).map((notification) => {
+      const item = document.createElement("article");
+      item.className = "notification-item";
+
+      const title = document.createElement("strong");
+      title.textContent = notificationTitle(notification.title);
+
+      const body = document.createElement("p");
+      body.textContent = notification.body || "通知内容为空。";
+
+      const meta = document.createElement("span");
+      meta.textContent = `录音 #${notification.recording_id} · ${formatDateTime(notification.sent_at)}`;
+
+      item.append(title, body, meta);
+      return item;
+    })
+  );
+}
+
 function renderEmptyState(message) {
   setText(selectors.recordings, 0);
   setText(selectors.processing, 0);
@@ -201,13 +279,112 @@ function renderEmptyState(message) {
   renderCards(selectors.doneColumn, [], "暂无已完成录音。");
   renderInsights(selectors.decisions, [], "暂无决策。");
   renderInsights(selectors.questions, [], "暂无待解决问题。", "question");
+  renderNotifications([]);
   document.querySelector(selectors.completionBar).style.width = "0%";
+}
+
+async function uploadRecording(file) {
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  if (!allowedExtensions.has(extension)) {
+    setUploadStatus("请选择 wav、mp3 或 m4a 音频文件。", true);
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("recording", file);
+  state.isUploading = true;
+  setUploadState(true, `正在上传并处理：${file.name}`);
+  scheduleAutoRefresh();
+
+  try {
+    const response = await fetch("/api/recordings/process", {
+      method: "POST",
+      body: formData
+    });
+    const payload = await readJsonResponse(response);
+    if (!response.ok) {
+      throw new Error(payload.error || `录音处理失败：${response.status}`);
+    }
+    setUploadStatus(`处理完成：录音 #${payload.recordingId}`);
+    await refresh();
+  } catch (error) {
+    setUploadStatus(error.message || "上传失败，请重试。", true);
+    console.error(error);
+  } finally {
+    state.isUploading = false;
+    setUploadState(false);
+    document.querySelector(selectors.uploadInput).value = "";
+    scheduleAutoRefresh();
+  }
+}
+
+async function updateTask(taskId, action) {
+  setTaskButtonsDisabled(taskId, true);
+  document.querySelector(selectors.boardStatus).textContent = action === "confirm" ? "正在确认任务" : "正在忽略任务";
+
+  try {
+    const response = await fetch(`/api/tasks/${taskId}/${action}`, { method: "POST" });
+    if (!response.ok) {
+      const payload = await readJsonResponse(response);
+      throw new Error(payload.error || `任务操作失败：${response.status}`);
+    }
+    await refresh();
+  } catch (error) {
+    document.querySelector(selectors.boardStatus).textContent = "任务操作失败";
+    console.error(error);
+  } finally {
+    setTaskButtonsDisabled(taskId, false);
+  }
+}
+
+function setTaskButtonsDisabled(taskId, disabled) {
+  document.querySelectorAll(`[data-task-id="${taskId}"]`).forEach((button) => {
+    button.disabled = disabled;
+  });
 }
 
 function setLoading(isLoading) {
   const refreshButton = document.querySelector(selectors.refresh);
   refreshButton.disabled = isLoading;
   refreshButton.textContent = isLoading ? "刷新中" : "刷新";
+}
+
+function setUploadState(isUploading, message = "可上传 wav、mp3、m4a 录音文件。") {
+  const uploadButton = document.querySelector(selectors.uploadButton);
+  uploadButton.disabled = isUploading;
+  uploadButton.textContent = isUploading ? "处理中" : "上传录音";
+  setUploadStatus(message, false);
+}
+
+function setUploadStatus(message, isError = false) {
+  const uploadStatus = document.querySelector(selectors.uploadStatus);
+  uploadStatus.textContent = message;
+  uploadStatus.classList.toggle("error", isError);
+}
+
+function scheduleAutoRefresh() {
+  window.clearTimeout(state.pollTimer);
+  if (!isAutoRefreshEnabled()) return;
+  state.pollTimer = window.setTimeout(refresh, pollIntervalMs(state.data));
+}
+
+function pollIntervalMs(data) {
+  return hasProcessing(data) || state.isUploading ? activePollMs : normalPollMs;
+}
+
+function hasProcessing(data) {
+  const recordings = Array.isArray(data?.recordings) ? data.recordings : [];
+  return recordings.some((recording) => recording.status === "processing") || Number(data?.stats?.processing) > 0;
+}
+
+function statusTextForPolling(data) {
+  if (!isAutoRefreshEnabled()) return "看板数据已同步，自动刷新已关闭";
+  const seconds = pollIntervalMs(data) / 1000;
+  return hasProcessing(data) || state.isUploading ? `处理中，${seconds} 秒后自动刷新` : `看板数据已同步，${seconds} 秒后自动刷新`;
+}
+
+function isAutoRefreshEnabled() {
+  return document.querySelector(selectors.autoRefresh).checked;
 }
 
 function setText(selector, value) {
@@ -232,5 +409,47 @@ function formatTime(date) {
   return date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
 }
 
-document.querySelector(selectors.refresh).addEventListener("click", refresh);
+function formatDateTime(value) {
+  if (!value) return "时间未知";
+  const date = new Date(String(value).replace(" ", "T"));
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function notificationTitle(title) {
+  if (!title || title === "Recording parsed") return "录音解析完成";
+  return title;
+}
+
+async function readJsonResponse(response) {
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
+}
+
+document.querySelector(selectors.refresh).addEventListener("click", () => {
+  window.clearTimeout(state.pollTimer);
+  refresh();
+});
+document.querySelector(selectors.uploadButton).addEventListener("click", () => {
+  document.querySelector(selectors.uploadInput).click();
+});
+document.querySelector(selectors.uploadInput).addEventListener("change", (event) => {
+  const [file] = event.target.files;
+  if (file) uploadRecording(file);
+});
+document.querySelector(selectors.autoRefresh).addEventListener("change", () => {
+  scheduleAutoRefresh();
+  document.querySelector(selectors.boardStatus).textContent = document.querySelector(selectors.autoRefresh).checked
+    ? statusTextForPolling(state.data)
+    : "自动刷新已关闭";
+});
+
 refresh();

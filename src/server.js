@@ -1,8 +1,11 @@
 import { createReadStream } from "node:fs";
-import { readFile, stat } from "node:fs/promises";
-import { extname, join } from "node:path";
+import { mkdir, stat, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { basename, extname, join } from "node:path";
 import { Database } from "./db.js";
 import { getTodayDashboard, processRecording, updateTaskStatus } from "./pipeline.js";
+
+const allowedAudioExtensions = new Set([".wav", ".mp3", ".m4a"]);
 
 const contentTypes = {
   ".css": "text/css",
@@ -10,11 +13,66 @@ const contentTypes = {
   ".js": "text/javascript"
 };
 
-async function readJson(request) {
+async function readBody(request) {
   const chunks = [];
   for await (const chunk of request) chunks.push(chunk);
-  const raw = Buffer.concat(chunks).toString("utf8");
+  return Buffer.concat(chunks);
+}
+
+async function readJson(request) {
+  const raw = (await readBody(request)).toString("utf8");
   return raw ? JSON.parse(raw) : {};
+}
+
+function parseMultipartFile(body, contentType) {
+  const boundary = contentType.match(/boundary=([^;]+)/)?.[1]?.replace(/^"|"$/g, "");
+  if (!boundary) throw new Error("multipart boundary is required");
+
+  const boundaryBuffer = Buffer.from(`--${boundary}`);
+  let cursor = body.indexOf(boundaryBuffer);
+
+  while (cursor !== -1) {
+    const partStart = cursor + boundaryBuffer.length;
+    if (body.subarray(partStart, partStart + 2).toString() === "--") break;
+
+    const headersStart = partStart + 2;
+    const headersEnd = body.indexOf(Buffer.from("\r\n\r\n"), headersStart);
+    if (headersEnd === -1) break;
+
+    const headers = body.subarray(headersStart, headersEnd).toString("utf8");
+    const fileName = headers.match(/filename="([^"]+)"/)?.[1];
+    const name = headers.match(/name="([^"]+)"/)?.[1];
+    const nextBoundary = body.indexOf(boundaryBuffer, headersEnd + 4);
+    if (nextBoundary === -1) break;
+
+    if (fileName && ["file", "recording"].includes(name)) {
+      return {
+        fileName,
+        data: body.subarray(headersEnd + 4, Math.max(headersEnd + 4, nextBoundary - 2))
+      };
+    }
+
+    cursor = nextBoundary;
+  }
+
+  throw new Error("recording file is required");
+}
+
+async function saveUploadedRecording(request, contentType, uploadDir) {
+  const upload = parseMultipartFile(await readBody(request), contentType);
+  const extension = extname(upload.fileName).toLowerCase();
+  if (!allowedAudioExtensions.has(extension)) {
+    throw new Error("only wav, mp3, and m4a audio files are supported");
+  }
+  if (upload.data.length === 0) {
+    throw new Error("uploaded recording is empty");
+  }
+
+  await mkdir(uploadDir, { recursive: true });
+  const safeName = basename(upload.fileName, extension).replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 80);
+  const filePath = join(uploadDir, `${Date.now()}-${randomUUID()}-${safeName || "recording"}${extension}`);
+  await writeFile(filePath, upload.data);
+  return filePath;
 }
 
 function sendJson(response, status, payload) {
@@ -33,6 +91,7 @@ async function serveStatic(request, response) {
 
 export async function createApp(options = {}) {
   const db = options.db ?? new Database(options.dbPath);
+  const uploadDir = options.uploadDir ?? process.env.RECORDINGS_DIR ?? "recordings";
   await db.init();
 
   return async function app(request, response) {
@@ -44,9 +103,12 @@ export async function createApp(options = {}) {
       }
 
       if (request.method === "POST" && url.pathname === "/api/recordings/process") {
-        const body = await readJson(request);
-        if (!body.path) return sendJson(response, 400, { error: "path is required" });
-        const result = await processRecording(db, body.path, options.services);
+        const contentType = request.headers["content-type"] ?? "";
+        const recordingPath = contentType.startsWith("multipart/form-data")
+          ? await saveUploadedRecording(request, contentType, uploadDir)
+          : (await readJson(request)).path;
+        if (!recordingPath) return sendJson(response, 400, { error: "path is required" });
+        const result = await processRecording(db, recordingPath, options.services);
         return sendJson(response, 201, result);
       }
 
