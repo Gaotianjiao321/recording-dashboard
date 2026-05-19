@@ -1,3 +1,4 @@
+import { stat } from "node:fs/promises";
 import { chunkAudio } from "./audio.js";
 import { sqlValue } from "./db.js";
 import { notifyAndRecord } from "./notifications.js";
@@ -136,12 +137,26 @@ export async function processRecording(db, recordingPath, services = {}) {
 }
 
 export async function getTodayDashboard(db) {
-  const recordings = await db.all(`
+  const recordingsRaw = await db.all(`
     SELECT id, file_path, duration_seconds, status, source_type, created_at
     FROM recordings
     WHERE source_type != 'manual'
     ORDER BY id DESC
   `);
+
+  const recordings = await Promise.all(recordingsRaw.map(async (r) => {
+    let size = 0;
+    if (r.file_path && r.file_path !== "manual") {
+      try {
+        const s = await stat(r.file_path);
+        size = s.size;
+      } catch {
+        // file might be deleted or not accessible
+      }
+    }
+    return { ...r, file_size: size };
+  }));
+
   const latest = await db.get(`
     SELECT *
     FROM parsed_results

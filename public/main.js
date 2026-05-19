@@ -948,7 +948,7 @@ function renderMaterialLibrary(data) {
     durationTd.textContent = formatDuration(r.duration_seconds);
 
     const sizeTd = document.createElement("td");
-    sizeTd.textContent = "-"; // Backend doesn't provide size yet
+    sizeTd.textContent = formatFileSize(r.file_size);
 
     const timeTd = document.createElement("td");
     timeTd.textContent = formatDateTime(r.created_at);
@@ -960,6 +960,8 @@ function renderMaterialLibrary(data) {
     statusTd.appendChild(badge);
 
     const actionTd = document.createElement("td");
+    actionTd.className = "library-actions";
+
     const playBtn = document.createElement("button");
     playBtn.className = "library-action-btn";
     playBtn.textContent = "▶ 试听";
@@ -968,13 +970,43 @@ function renderMaterialLibrary(data) {
     const analyzeBtn = document.createElement("button");
     analyzeBtn.className = "library-action-btn primary";
     analyzeBtn.textContent = "🪄 解析";
-    analyzeBtn.onclick = () => reanalyzeRecording(r);
+    analyzeBtn.onclick = (e) => reanalyzeRecording(r, e.target);
     if (r.status === "processing") analyzeBtn.disabled = true;
 
-    actionTd.append(playBtn, analyzeBtn);
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "library-action-btn danger";
+    deleteBtn.textContent = "🗑 删除";
+    deleteBtn.onclick = () => deleteRecording(r);
+
+    actionTd.append(playBtn, analyzeBtn, deleteBtn);
     tr.append(nameTd, durationTd, sizeTd, timeTd, statusTd, actionTd);
     return tr;
   }));
+}
+
+function formatFileSize(bytes) {
+  if (!bytes || bytes <= 0) return "-";
+  const units = ["B", "KB", "MB", "GB"];
+  let i = 0;
+  while (bytes >= 1024 && i < units.length - 1) {
+    bytes /= 1024;
+    i++;
+  }
+  return `${bytes.toFixed(1)} ${units[i]}`;
+}
+
+async function deleteRecording(recording) {
+  if (!confirm(`确定要删除录音 ${recording.id} 吗？相关任务不会被删除。`)) return;
+
+  try {
+    const response = await fetch(`/api/recordings/${recording.id}`, {
+      method: "DELETE"
+    });
+    if (!response.ok) throw new Error("删除失败");
+    await refresh();
+  } catch (error) {
+    alert(error.message);
+  }
 }
 
 function statusLabel(status) {
@@ -1005,9 +1037,11 @@ function closeAudioPlayer() {
   container.hidden = true;
 }
 
-async function reanalyzeRecording(recording) {
-  state.isUploading = true;
-  setUploadState(true, `正在重新解析：录音 #${recording.id}`);
+async function reanalyzeRecording(recording, btn) {
+  const oldText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "⏳...";
+
   try {
     const response = await fetch("/api/recordings/process", {
       method: "POST",
@@ -1018,10 +1052,9 @@ async function reanalyzeRecording(recording) {
     if (!response.ok) throw new Error(payload.error || "解析失败");
     await refresh();
   } catch (error) {
-    setUploadStatus(error.message, true);
-  } finally {
-    state.isUploading = false;
-    setUploadState(false);
+    alert(error.message);
+    btn.textContent = oldText;
+    btn.disabled = false;
   }
 }
 

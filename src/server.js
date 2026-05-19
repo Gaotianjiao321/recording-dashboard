@@ -94,9 +94,31 @@ async function serveStatic(request, response) {
   const url = new URL(request.url, "http://localhost");
   const relativePath = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
   const filePath = join("public", relativePath);
-  await stat(filePath);
-  response.writeHead(200, { "content-type": contentTypes[extname(filePath)] ?? "application/octet-stream" });
-  createReadStream(filePath).pipe(response);
+  try {
+    const s = await stat(filePath);
+    if (s.isDirectory()) throw new Error("not a file");
+    response.writeHead(200, { "content-type": contentTypes[extname(filePath)] ?? "application/octet-stream" });
+    createReadStream(filePath).pipe(response);
+  } catch (error) {
+    if (error.code === "ENOENT" || error.message === "not a file") {
+      sendJson(response, 404, { error: "not found" });
+    } else {
+      throw error;
+    }
+  }
+}
+
+async function serveRecording(request, response, uploadDir) {
+  const url = new URL(request.url, "http://localhost");
+  const fileName = basename(url.pathname);
+  const filePath = join(uploadDir, fileName);
+  try {
+    const s = await stat(filePath);
+    response.writeHead(200, { "content-type": "audio/webm" }); // Defaulting to webm, browser will handle
+    createReadStream(filePath).pipe(response);
+  } catch (error) {
+    sendJson(response, 404, { error: "recording not found" });
+  }
 }
 
 function normalizeTaskInput(body) {
@@ -213,6 +235,16 @@ export async function createApp(options = {}) {
         } catch (error) {
           return sendJson(response, error.message === "task not found" ? 404 : 400, { error: error.message });
         }
+      }
+
+      if (request.method === "GET" && url.pathname.startsWith("/recordings/")) {
+        return serveRecording(request, response, uploadDir);
+      }
+
+      if (request.method === "DELETE" && url.pathname.match(/^\/api\/recordings\/\d+$/)) {
+        const id = Number(url.pathname.split("/").pop());
+        await db.exec(`DELETE FROM recordings WHERE id = ${sqlValue(id)}`);
+        return sendJson(response, 200, { ok: true });
       }
 
       if (request.method === "GET") return serveStatic(request, response);
