@@ -20,7 +20,12 @@ const allowedTaskStatuses = new Set(["pending_confirm", "in_progress", "done", "
 const contentTypes = {
   ".css": "text/css",
   ".html": "text/html",
-  ".js": "text/javascript"
+  ".js": "text/javascript",
+  ".wav": "audio/wav",
+  ".mp3": "audio/mpeg",
+  ".m4a": "audio/mp4",
+  ".webm": "audio/webm",
+  ".ogg": "audio/ogg"
 };
 
 async function readBody(request) {
@@ -105,19 +110,6 @@ async function serveStatic(request, response) {
     } else {
       throw error;
     }
-  }
-}
-
-async function serveRecording(request, response, uploadDir) {
-  const url = new URL(request.url, "http://localhost");
-  const fileName = basename(url.pathname);
-  const filePath = join(uploadDir, fileName);
-  try {
-    const s = await stat(filePath);
-    response.writeHead(200, { "content-type": "audio/webm" }); // Defaulting to webm, browser will handle
-    createReadStream(filePath).pipe(response);
-  } catch (error) {
-    sendJson(response, 404, { error: "recording not found" });
   }
 }
 
@@ -237,8 +229,14 @@ export async function createApp(options = {}) {
         }
       }
 
-      if (request.method === "GET" && url.pathname.startsWith("/recordings/")) {
-        return serveRecording(request, response, uploadDir);
+      const recordingMatch = url.pathname.match(/^\/recordings\/([^/]+)$/);
+      if (request.method === "GET" && recordingMatch && !recordingMatch[1].includes("..")) {
+        const filePath = join(uploadDir, recordingMatch[1]);
+        await stat(filePath);
+        const ext = extname(filePath).toLowerCase();
+        response.writeHead(200, { "content-type": contentTypes[ext] ?? "application/octet-stream" });
+        createReadStream(filePath).pipe(response);
+        return;
       }
 
       if (request.method === "DELETE" && url.pathname.match(/^\/api\/recordings\/\d+$/)) {
