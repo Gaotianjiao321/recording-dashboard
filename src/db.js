@@ -73,12 +73,18 @@ export class Database {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         recording_id INTEGER NOT NULL,
         title TEXT NOT NULL,
+        body TEXT NOT NULL DEFAULT '',
         status TEXT NOT NULL,
         priority TEXT NOT NULL DEFAULT 'medium',
         due_date TEXT,
         project TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(recording_id) REFERENCES recordings(id)
+      );
+      CREATE TABLE IF NOT EXISTS projects (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
       CREATE TABLE IF NOT EXISTS notifications (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,6 +99,7 @@ export class Database {
       { name: "source_type", definition: "TEXT NOT NULL DEFAULT 'recording'" }
     ]);
     await this.ensureColumns("tasks", [
+      { name: "body", definition: "TEXT NOT NULL DEFAULT ''" },
       { name: "priority", definition: "TEXT NOT NULL DEFAULT 'medium'" },
       { name: "due_date", definition: "TEXT" },
       { name: "project", definition: "TEXT" }
@@ -101,6 +108,11 @@ export class Database {
       UPDATE recordings
       SET source_type = 'manual', status = 'manual'
       WHERE file_path = 'manual';
+
+      INSERT OR IGNORE INTO projects (name)
+      SELECT DISTINCT TRIM(project)
+      FROM tasks
+      WHERE project IS NOT NULL AND TRIM(project) != '';
     `);
   }
 

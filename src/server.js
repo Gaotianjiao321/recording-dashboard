@@ -3,7 +3,15 @@ import { mkdir, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { basename, extname, join } from "node:path";
 import { Database, sqlValue } from "./db.js";
-import { getTodayDashboard, processRecording, updateTaskStatus } from "./pipeline.js";
+import {
+  createProject,
+  getProjectDashboard,
+  getTodayDashboard,
+  listProjects,
+  processRecording,
+  updateTask,
+  updateTaskStatus
+} from "./pipeline.js";
 
 const allowedAudioExtensions = new Set([".wav", ".mp3", ".m4a", ".webm", ".ogg"]);
 const allowedPriorities = new Set(["high", "medium", "low"]);
@@ -95,11 +103,12 @@ function normalizeTaskInput(body) {
   const title = typeof body.title === "string" ? body.title.trim() : "";
   if (!title) throw new Error("title is required");
 
+  const taskBody = typeof body.body === "string" && body.body.trim() ? body.body.trim() : "";
   const priority = typeof body.priority === "string" && allowedPriorities.has(body.priority) ? body.priority : "medium";
   const dueDate = typeof body.due_date === "string" && body.due_date.trim() ? body.due_date.trim() : null;
   const project = typeof body.project === "string" && body.project.trim() ? body.project.trim() : null;
 
-  return { title, priority, dueDate, project };
+  return { title, body: taskBody, priority, dueDate, project };
 }
 
 async function createManualTask(db, input) {
@@ -108,18 +117,20 @@ async function createManualTask(db, input) {
     VALUES ('manual', 'manual', 'manual', 0)
   `);
   const taskId = await db.run(`
-    INSERT INTO tasks (recording_id, title, status, priority, due_date, project)
+    INSERT INTO tasks (recording_id, title, body, status, priority, due_date, project)
     VALUES (
       ${sqlValue(manualRecordingId)},
       ${sqlValue(input.title)},
+      ${sqlValue(input.body)},
       'pending_confirm',
       ${sqlValue(input.priority)},
       ${sqlValue(input.dueDate)},
       ${sqlValue(input.project)}
     )
   `);
+  if (input.project) await createProject(db, input.project);
   return db.get(`
-    SELECT id, recording_id, title, status, priority, due_date, project
+    SELECT id, recording_id, title, body, status, priority, due_date, project
     FROM tasks
     WHERE id = ${sqlValue(taskId)}
   `);
@@ -150,6 +161,18 @@ export async function createApp(options = {}) {
         return sendJson(response, 201, task);
       }
 
+      if (request.method === "GET" && url.pathname === "/api/projects") {
+        return sendJson(response, 200, await listProjects(db));
+      }
+
+      if (request.method === "POST" && url.pathname === "/api/projects") {
+        try {
+          return sendJson(response, 201, await createProject(db, (await readJson(request)).name));
+        } catch (error) {
+          return sendJson(response, 400, { error: error.message });
+        }
+      }
+
       if (request.method === "POST" && url.pathname === "/api/recordings/process") {
         const contentType = request.headers["content-type"] ?? "";
         const recordingPath = contentType.startsWith("multipart/form-data")
@@ -162,6 +185,10 @@ export async function createApp(options = {}) {
 
       if (request.method === "GET" && url.pathname === "/api/dashboard/today") {
         return sendJson(response, 200, await getTodayDashboard(db));
+      }
+
+      if (request.method === "GET" && url.pathname === "/api/dashboard/projects") {
+        return sendJson(response, 200, await getProjectDashboard(db));
       }
 
       const taskMatch = url.pathname.match(/^\/api\/tasks\/(\d+)\/(confirm|dismiss)$/);
@@ -177,6 +204,15 @@ export async function createApp(options = {}) {
           return sendJson(response, 400, { error: "unsupported task status" });
         }
         return sendJson(response, 200, await updateTaskStatus(db, Number(taskStatusMatch[1]), status));
+      }
+
+      const taskUpdateMatch = url.pathname.match(/^\/api\/tasks\/(\d+)$/);
+      if ((request.method === "PATCH" || request.method === "PUT") && taskUpdateMatch) {
+        try {
+          return sendJson(response, 200, await updateTask(db, Number(taskUpdateMatch[1]), await readJson(request)));
+        } catch (error) {
+          return sendJson(response, error.message === "task not found" ? 404 : 400, { error: error.message });
+        }
       }
 
       if (request.method === "GET") return serveStatic(request, response);

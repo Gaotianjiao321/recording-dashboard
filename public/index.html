@@ -47,7 +47,7 @@
             <button class="chip active" data-filter="today" type="button">📅 今日</button>
             <button class="chip" data-filter="recordings" type="button">🎙 录音</button>
             <button class="chip" data-filter="tasks" type="button">📋 任务</button>
-            <button class="chip" data-filter="decisions" type="button">💡 决策</button>
+            <button class="chip" data-filter="projects" type="button">🗂 项目</button>
           </div>
           <div class="filter-spacer"></div>
           <label class="auto-refresh">
@@ -83,6 +83,8 @@
             <div id="done-column" class="card-stack"></div>
           </div>
         </section>
+
+        <section id="project-board" class="project-board" aria-label="项目视图" hidden></section>
       </main>
 
       <aside class="sidebar" aria-label="今日洞察">
@@ -112,12 +114,14 @@
     <div id="task-modal" class="modal-overlay" hidden>
       <div class="modal" role="dialog" aria-label="手动记录待办">
         <div class="modal-header">
-          <h3>手动记录待办</h3>
+          <h3 id="task-modal-title">手动记录待办</h3>
           <button id="modal-close" class="modal-close-btn" type="button" aria-label="关闭">&times;</button>
         </div>
         <div class="modal-body">
-          <label for="task-input">待办内容</label>
-          <textarea id="task-input" rows="3" placeholder="输入待办事项..."></textarea>
+          <label for="task-title">标题</label>
+          <input id="task-title" type="text" placeholder="输入标题..." />
+          <label for="task-body">正文</label>
+          <textarea id="task-body" rows="3" placeholder="补充背景、行动细节或备注..."></textarea>
           <div class="task-fields">
             <label>
               优先级
@@ -133,7 +137,10 @@
             </label>
           </div>
           <label for="task-project">项目归属</label>
-          <input id="task-project" type="text" placeholder="例如：工作看板" />
+          <div class="project-picker">
+            <select id="task-project"></select>
+            <button id="new-project" class="mini-btn" type="button">新建项目</button>
+          </div>
         </div>
         <div class="modal-footer">
           <button id="modal-cancel" class="icon-btn secondary" type="button">取消</button>

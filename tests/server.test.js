@@ -42,6 +42,8 @@ test("HTTP API processes a recording and exposes dashboard state", async () => {
     const dashboard = await (await fetch(`${baseUrl}/api/dashboard/today`)).json();
     assert.equal(dashboard.stats.recordings, 1);
     assert.equal(dashboard.tasks[0].status, "pending_confirm");
+    assert.equal(dashboard.tasks[0].body, "");
+    assert.equal(dashboard.projects[0].name, "录音解析");
 
     const confirmResponse = await fetch(`${baseUrl}/api/tasks/${dashboard.tasks[0].id}/confirm`, {
       method: "POST"
@@ -92,6 +94,7 @@ test("manual task creation via POST /api/tasks", async () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         title: "手动待办事项",
+        body: "补充执行背景",
         priority: "high",
         due_date: "2026-05-20",
         project: "工作看板"
@@ -100,6 +103,7 @@ test("manual task creation via POST /api/tasks", async () => {
     assert.equal(res.status, 201);
     const task = await res.json();
     assert.equal(task.title, "手动待办事项");
+    assert.equal(task.body, "补充执行背景");
     assert.equal(task.status, "pending_confirm");
     assert.equal(task.priority, "high");
     assert.equal(task.due_date, "2026-05-20");
@@ -111,6 +115,42 @@ test("manual task creation via POST /api/tasks", async () => {
     assert.equal(dashboard.stats.recordings, 0);
     assert.equal(dashboard.recordings.length, 0);
     assert.equal(dashboard.tasks[0].title, "手动待办事项");
+    assert.equal(dashboard.projects[0].name, "工作看板");
+    assert.equal(dashboard.projects[0].tasks[0].body, "补充执行背景");
+
+    const projects = await (await fetch(`${baseUrl}/api/projects`)).json();
+    assert.deepEqual(projects.map((project) => project.name), ["工作看板"]);
+
+    const projectRes = await fetch(`${baseUrl}/api/projects`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "新项目" })
+    });
+    assert.equal(projectRes.status, 201);
+    assert.equal((await projectRes.json()).name, "新项目");
+
+    const updateRes = await fetch(`${baseUrl}/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "更新后的标题",
+        body: "更新后的正文",
+        priority: "low",
+        due_date: "",
+        project: "新项目"
+      })
+    });
+    assert.equal(updateRes.status, 200);
+    const updatedTask = await updateRes.json();
+    assert.equal(updatedTask.title, "更新后的标题");
+    assert.equal(updatedTask.body, "更新后的正文");
+    assert.equal(updatedTask.priority, "low");
+    assert.equal(updatedTask.due_date, null);
+    assert.equal(updatedTask.project, "新项目");
+
+    const grouped = await (await fetch(`${baseUrl}/api/dashboard/projects`)).json();
+    assert.equal(grouped.projects[0].name, "新项目");
+    assert.equal(grouped.projects[0].tasks[0].title, "更新后的标题");
 
     const badRes = await fetch(`${baseUrl}/api/tasks`, {
       method: "POST",

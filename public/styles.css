@@ -361,9 +361,16 @@ h1 {
 }
 
 .card-title {
-  font-size: 14px;
-  font-weight: 650;
+  font-size: 15px;
+  font-weight: 750;
   line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.card-body {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.62;
   overflow-wrap: anywhere;
 }
 
@@ -468,6 +475,50 @@ h1 {
   min-height: 84px;
   padding: 14px;
   text-align: center;
+}
+
+.project-board {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.project-group {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 14px;
+}
+
+.project-group-head {
+  align-items: flex-start;
+  border-bottom: 1px dashed var(--line);
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 4px 4px 12px;
+}
+
+.project-group-head h2 {
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.project-group-head span {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.7;
+  text-align: right;
+}
+
+.project-task-stack {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
 }
 
 .sidebar-block {
@@ -578,7 +629,8 @@ h1 {
     border-top: 1px solid var(--line);
   }
 
-  .board {
+  .board,
+  .project-board {
     grid-template-columns: 1fr 1fr;
   }
 }
@@ -612,7 +664,10 @@ h1 {
   }
 
   .kpi-grid,
-  .board {
+  .board,
+  .project-board,
+  .task-fields,
+  .project-picker {
     grid-template-columns: 1fr;
   }
 
@@ -722,6 +777,31 @@ h1 {
   margin-top: 8px;
   padding: 9px 10px;
   width: 100%;
+}
+
+.project-picker {
+  align-items: stretch;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.mini-btn {
+  align-self: end;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 8px;
+  padding: 9px 10px;
+  white-space: nowrap;
+}
+
+.mini-btn:hover {
+  border-color: var(--line-strong);
 }
 
 .modal-body > label[for="task-project"] {

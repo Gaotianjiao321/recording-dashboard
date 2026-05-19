@@ -21,6 +21,26 @@ function collectPrefixedLines(transcript, prefix) {
     .filter(Boolean);
 }
 
+function isCategorizedLine(line) {
+  return ["TODO", "Decision", "Question", "Idea", "Waiting"].some((prefix) =>
+    line.toLowerCase().startsWith(prefix.toLowerCase())
+  );
+}
+
+function summarizeTranscript(transcript, taskCount) {
+  const summary = transcript
+    .split(/\r?\n|[。.!?]/)
+    .map((line) => line.trim())
+    .filter((line) => line && !isCategorizedLine(line))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (summary) return summary.slice(0, 220);
+  if (taskCount > 0) return `录音已解析，生成了 ${taskCount} 个待办。`;
+  return "Recording processed with no transcript text.";
+}
+
 function buildPrompt(transcript) {
   return `You are parsing a meeting transcript for a local recording dashboard.
 
@@ -29,7 +49,9 @@ Return only valid JSON. Do not wrap it in Markdown.
 Required shape:
 {
   "summary": "short plain-language summary",
-  "my_todos": ["tasks owned by me"],
+  "my_todos": [
+    { "title": "task title", "body": "task details, evidence, or context" }
+  ],
   "waiting_for_others": ["items blocked on other people"],
   "decisions": ["decisions made"],
   "open_questions": ["unresolved questions"],
@@ -41,6 +63,8 @@ Rules:
 - Use empty arrays when a category has no items.
 - Do not invent people, dates, or tasks that are not supported by the transcript.
 - Keep every array item concise and actionable.
+- Put actionable tasks only in my_todos. Keep summary as a short overview, not a task list.
+- Every item in my_todos must include title and body. Use an empty body only when the transcript has no extra context.
 
 Transcript:
 ${transcript}`;
@@ -61,6 +85,30 @@ function normalizeArray(value) {
   return [String(value).trim()].filter(Boolean);
 }
 
+function normalizeTodoItem(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const title = String(value.title ?? value.name ?? "").trim();
+    const body = String(value.body ?? value.description ?? value.details ?? "").trim();
+    if (title) return { title, body };
+    if (body) return { title: body.slice(0, 80), body };
+    return null;
+  }
+
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  const [title, ...bodyParts] = text.split(/\s*[-:：]\s+/);
+  const body = bodyParts.join(" - ").trim();
+  return { title: title.trim() || text, body };
+}
+
+function normalizeTodos(value) {
+  if (!Array.isArray(value)) {
+    const item = normalizeTodoItem(value);
+    return item ? [item] : [];
+  }
+  return value.map(normalizeTodoItem).filter(Boolean);
+}
+
 export function normalizeParsedResult(value) {
   const missing = resultKeys.filter((key) => !(key in value));
   if (missing.length) {
@@ -69,7 +117,7 @@ export function normalizeParsedResult(value) {
 
   return {
     summary: String(value.summary ?? "").trim() || "Recording processed with no transcript text.",
-    my_todos: normalizeArray(value.my_todos),
+    my_todos: normalizeTodos(value.my_todos),
     waiting_for_others: normalizeArray(value.waiting_for_others),
     decisions: normalizeArray(value.decisions),
     open_questions: normalizeArray(value.open_questions),
@@ -78,7 +126,6 @@ export function normalizeParsedResult(value) {
 }
 
 export function parseTranscriptHeuristically(transcript) {
-  const normalized = transcript.trim().replace(/\s+/g, " ");
   const todos = collectPrefixedLines(transcript, "TODO");
   const decisions = collectPrefixedLines(transcript, "Decision");
   const openQuestions = collectPrefixedLines(transcript, "Question");
@@ -86,8 +133,8 @@ export function parseTranscriptHeuristically(transcript) {
   const waiting = collectPrefixedLines(transcript, "Waiting");
 
   return {
-    summary: normalized.slice(0, 220) || "Recording processed with no transcript text.",
-    my_todos: todos.length ? todos : ["Review generated transcript"],
+    summary: summarizeTranscript(transcript, todos.length),
+    my_todos: (todos.length ? todos : ["Review generated transcript"]).map((title) => ({ title, body: "" })),
     waiting_for_others: waiting,
     decisions,
     open_questions: openQuestions,

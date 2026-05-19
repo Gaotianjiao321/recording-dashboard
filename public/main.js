@@ -15,6 +15,7 @@ const selectors = {
   pendingColumn: "#pending-column",
   processingColumn: "#processing-column",
   doneColumn: "#done-column",
+  projectBoard: "#project-board",
   summary: "#summary",
   decisions: "#decisions",
   questions: "#questions",
@@ -22,10 +23,13 @@ const selectors = {
   completionBar: "#completion-bar",
   chipRow: "#chip-row",
   taskModal: "#task-modal",
-  taskInput: "#task-input",
+  taskModalTitle: "#task-modal-title",
+  taskTitle: "#task-title",
+  taskBody: "#task-body",
   taskPriority: "#task-priority",
   taskDueDate: "#task-due-date",
   taskProject: "#task-project",
+  newProject: "#new-project",
   modalClose: "#modal-close",
   modalCancel: "#modal-cancel",
   modalSubmit: "#modal-submit"
@@ -44,7 +48,9 @@ const state = {
   recordingStartedAt: 0,
   recordingTimer: null,
   pollTimer: null,
-  activeFilter: "today"
+  activeFilter: "today",
+  projects: [],
+  editingTaskId: null
 };
 
 async function refresh() {
@@ -60,6 +66,8 @@ async function refresh() {
 
     const data = await response.json();
     state.data = data;
+    state.projects = normalizeProjects(data.projects);
+    renderProjectOptions();
     renderDashboard(data);
     document.querySelector(selectors.boardStatus).textContent = statusTextForPolling(data);
     document.querySelector(selectors.lastUpdated).textContent = `最近刷新 ${formatTime(new Date())}`;
@@ -90,6 +98,7 @@ function renderDashboard(data) {
   setText(selectors.pending, (stats.pendingTasks ?? pendingTasks.length) + (stats.inProgressTasks ?? inProgressTasks.length) + (stats.doneTasks ?? doneTasks.length));
 
   renderBoard(data, state.activeFilter);
+  renderProjects(data);
 
   setText(selectors.summary, latest?.summary || "暂无已处理录音。");
   renderInsights(selectors.decisions, latest?.decisions, "暂无决策。");
@@ -120,6 +129,30 @@ function renderBoard(data, filter) {
     return;
   }
 
+  if (filter === "today") {
+    const pendingTasks = tasks.filter((task) => task.status === "pending_confirm");
+    const inProgressTasks = tasks.filter((task) => task.status === "in_progress");
+    const doneTasks = tasks.filter((task) => task.status === "done");
+    const processingRecordings = recordings.filter((recording) => recording.status === "processing");
+    const doneRecordings = recordings.filter((recording) => recording.status === "processed");
+
+    setText(selectors.pendingCount, pendingTasks.length);
+    setText(selectors.processingCount, inProgressTasks.length + processingRecordings.length);
+    setText(selectors.doneCount, doneTasks.length + doneRecordings.length);
+    renderCards(selectors.pendingColumn, pendingTasks.map(createTaskCard), "暂无待确认任务。");
+    renderCards(
+      selectors.processingColumn,
+      [...inProgressTasks.map(createTaskCard), ...processingRecordings.map(createProcessingCard)],
+      "暂无进行中的任务或录音。"
+    );
+    renderCards(
+      selectors.doneColumn,
+      [...doneTasks.map(createTaskCard), ...doneRecordings.map(createDoneCard)],
+      "暂无已完成任务或录音。"
+    );
+    return;
+  }
+
   const pendingTasks = tasks.filter((task) => task.status === "pending_confirm");
   const inProgressTasks = tasks.filter((task) => task.status === "in_progress");
   const doneTasks = tasks.filter((task) => task.status === "done");
@@ -131,6 +164,72 @@ function renderBoard(data, filter) {
   renderCards(selectors.doneColumn, doneTasks.map(createTaskCard), "暂无已完成任务。");
 }
 
+function renderProjects(data) {
+  const projectBoard = document.querySelector(selectors.projectBoard);
+  const groups = Array.isArray(data.projects) && data.projects.length
+    ? data.projects
+    : groupTasksByProject(Array.isArray(data.tasks) ? data.tasks : []);
+
+  if (!groups.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-card";
+    empty.textContent = "暂无项目任务。";
+    projectBoard.replaceChildren(empty);
+    return;
+  }
+
+  projectBoard.replaceChildren(
+    ...groups.map((group) => {
+      const section = document.createElement("article");
+      section.className = "project-group";
+
+      const header = document.createElement("div");
+      header.className = "project-group-head";
+
+      const title = document.createElement("h2");
+      title.textContent = group.name || "未归属";
+
+      const stats = document.createElement("span");
+      stats.textContent = `${group.total ?? group.tasks?.length ?? 0} 条 · 待办 ${group.pendingTasks ?? 0} · 进行中 ${group.inProgressTasks ?? 0} · 完成 ${group.doneTasks ?? 0}`;
+
+      const stack = document.createElement("div");
+      stack.className = "project-task-stack";
+      const cards = Array.isArray(group.tasks) && group.tasks.length
+        ? group.tasks.map((task) => renderCard(createTaskCard(task)))
+        : [renderEmptyCard("这个项目下暂无任务。")];
+
+      header.append(title, stats);
+      stack.replaceChildren(...cards);
+      section.append(header, stack);
+      return section;
+    })
+  );
+}
+
+function groupTasksByProject(tasks) {
+  const groups = new Map();
+  for (const task of tasks) {
+    const name = task.project || "未归属";
+    if (!groups.has(name)) {
+      groups.set(name, {
+        name,
+        total: 0,
+        pendingTasks: 0,
+        inProgressTasks: 0,
+        doneTasks: 0,
+        tasks: []
+      });
+    }
+    const group = groups.get(name);
+    group.total += 1;
+    if (task.status === "pending_confirm") group.pendingTasks += 1;
+    if (task.status === "in_progress") group.inProgressTasks += 1;
+    if (task.status === "done") group.doneTasks += 1;
+    group.tasks.push(task);
+  }
+  return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
+}
+
 function createTaskCard(task) {
   const config = taskCardConfig(task);
   return {
@@ -138,15 +237,19 @@ function createTaskCard(task) {
     tagIcon: config.tagIcon,
     tagClass: config.tagClass,
     title: task.title || "未命名任务",
+    body: task.body || "",
     meta: task.project || `任务 #${task.id}`,
     avatar: config.avatar,
     points: priorityText(task.priority),
     status: taskMetaText(task),
-    actions: config.actions.map((action) => ({
-      ...action,
-      taskId: task.id,
-      onClick: () => updateTaskStatus(task.id, action.status)
-    }))
+    actions: [
+      { label: "✎ 编辑", variant: "ghost", taskId: task.id, onClick: () => openModal(task) },
+      ...config.actions.map((action) => ({
+        ...action,
+        taskId: task.id,
+        onClick: () => updateTaskStatus(task.id, action.status)
+      }))
+    ]
   };
 }
 
@@ -240,6 +343,10 @@ function renderCard(card) {
   title.className = "card-title";
   title.textContent = card.title;
 
+  const body = document.createElement("p");
+  body.className = "card-body";
+  body.textContent = card.body;
+
   const meta = document.createElement("div");
   meta.className = "card-meta";
 
@@ -260,6 +367,10 @@ function renderCard(card) {
   left.append(avatar, points);
   meta.append(left, id);
   article.append(tag, title);
+
+  if (card.body) {
+    article.append(body);
+  }
 
   if (card.status) {
     const status = document.createElement("p");
@@ -372,6 +483,7 @@ function renderEmptyState(message) {
   renderInsights(selectors.decisions, [], "暂无决策。");
   renderInsights(selectors.questions, [], "暂无待解决问题。", "question");
   renderNotifications([]);
+  document.querySelector(selectors.projectBoard).replaceChildren(renderEmptyCard("暂无项目任务。"));
   document.querySelector(selectors.completionBar).style.width = "0%";
 }
 
@@ -568,6 +680,69 @@ function setText(selector, value) {
   document.querySelector(selector).textContent = String(value);
 }
 
+function normalizeProjects(projectGroups = []) {
+  const names = new Set();
+  for (const project of projectGroups) {
+    const name = typeof project === "string" ? project : project?.name;
+    if (name) names.add(name);
+  }
+  return [...names].sort((a, b) => a.localeCompare(b, "zh-CN"));
+}
+
+function renderProjectOptions(selected = document.querySelector(selectors.taskProject)?.value ?? "") {
+  const select = document.querySelector(selectors.taskProject);
+  if (!select) return;
+
+  const options = [
+    optionElement("", "未归属"),
+    ...state.projects.map((name) => optionElement(name, name))
+  ];
+  select.replaceChildren(...options);
+  select.value = state.projects.includes(selected) ? selected : "";
+}
+
+function optionElement(value, label) {
+  const option = document.createElement("option");
+  option.value = value;
+  option.textContent = label;
+  return option;
+}
+
+async function loadProjects(selected = "") {
+  try {
+    const response = await fetch("/api/projects");
+    if (!response.ok) throw new Error(`项目列表请求失败：${response.status}`);
+    const projects = await response.json();
+    state.projects = normalizeProjects(projects);
+    renderProjectOptions(selected);
+  } catch (error) {
+    renderProjectOptions(selected);
+    console.error(error);
+  }
+}
+
+async function createProjectFromPrompt() {
+  const name = window.prompt("请输入新项目名称");
+  const normalizedName = name?.trim();
+  if (!normalizedName) return;
+
+  try {
+    const response = await fetch("/api/projects", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: normalizedName })
+    });
+    const payload = await readJsonResponse(response);
+    if (!response.ok) throw new Error(payload.error || "新建项目失败");
+    if (!state.projects.includes(payload.name)) state.projects.push(payload.name);
+    state.projects.sort((a, b) => a.localeCompare(b, "zh-CN"));
+    renderProjectOptions(payload.name);
+  } catch (error) {
+    document.querySelector(selectors.boardStatus).textContent = error.message || "新建项目失败";
+    console.error(error);
+  }
+}
+
 function recordingTitle(recording, fallback) {
   return recording?.id ? `第 ${recording.id} 条录音 · ${fallback}` : fallback;
 }
@@ -643,12 +818,14 @@ function applyFilter(filter) {
 
   const kpiGrid = document.querySelector(".kpi-grid");
   const board = document.querySelector(".board");
+  const projectBoard = document.querySelector(selectors.projectBoard);
   const sidebar = document.querySelector(".sidebar");
   const columns = document.querySelectorAll(".column");
 
   // KPI cards always visible
   kpiGrid.style.display = "";
   board.style.display = "";
+  projectBoard.hidden = true;
   sidebar.style.display = "";
   columns.forEach((col) => { col.style.display = ""; });
 
@@ -656,34 +833,39 @@ function applyFilter(filter) {
     sidebar.style.display = "none";
   } else if (filter === "tasks") {
     sidebar.style.display = "none";
-  } else if (filter === "decisions") {
+  } else if (filter === "projects") {
     board.style.display = "none";
+    projectBoard.hidden = false;
+    sidebar.style.display = "none";
   }
 }
 
 async function submitManualTask() {
-  const input = document.querySelector(selectors.taskInput);
-  const title = input.value.trim();
+  const titleInput = document.querySelector(selectors.taskTitle);
+  const title = titleInput.value.trim();
   if (!title) return;
 
   const submitBtn = document.querySelector(selectors.modalSubmit);
   submitBtn.disabled = true;
-  submitBtn.textContent = "添加中";
+  submitBtn.textContent = state.editingTaskId ? "保存中" : "添加中";
+  const payload = {
+    title,
+    body: document.querySelector(selectors.taskBody).value,
+    priority: document.querySelector(selectors.taskPriority).value,
+    due_date: document.querySelector(selectors.taskDueDate).value,
+    project: document.querySelector(selectors.taskProject).value
+  };
+  const url = state.editingTaskId ? `/api/tasks/${state.editingTaskId}` : "/api/tasks";
 
   try {
-    const response = await fetch("/api/tasks", {
-      method: "POST",
+    const response = await fetch(url, {
+      method: state.editingTaskId ? "PATCH" : "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        title,
-        priority: document.querySelector(selectors.taskPriority).value,
-        due_date: document.querySelector(selectors.taskDueDate).value,
-        project: document.querySelector(selectors.taskProject).value
-      })
+      body: JSON.stringify(payload)
     });
     if (!response.ok) {
       const payload = await readJsonResponse(response);
-      throw new Error(payload.error || "添加失败");
+      throw new Error(payload.error || (state.editingTaskId ? "保存失败" : "添加失败"));
     }
     closeModal();
     await refresh();
@@ -692,22 +874,29 @@ async function submitManualTask() {
     console.error(error);
   } finally {
     submitBtn.disabled = false;
-    submitBtn.textContent = "添加";
+    submitBtn.textContent = state.editingTaskId ? "保存" : "添加";
   }
 }
 
-function openModal() {
+async function openModal(task = null) {
   const modal = document.querySelector(selectors.taskModal);
+  const isEditing = Boolean(task?.id);
+  state.editingTaskId = isEditing ? task.id : null;
   modal.hidden = false;
-  document.querySelector(selectors.taskInput).value = "";
-  document.querySelector(selectors.taskPriority).value = "medium";
-  document.querySelector(selectors.taskDueDate).value = "";
-  document.querySelector(selectors.taskProject).value = "";
-  document.querySelector(selectors.taskInput).focus();
+  document.querySelector(selectors.taskModalTitle).textContent = isEditing ? "编辑待办" : "手动记录待办";
+  document.querySelector(selectors.taskTitle).value = task?.title || "";
+  document.querySelector(selectors.taskBody).value = task?.body || "";
+  document.querySelector(selectors.taskPriority).value = task?.priority || "medium";
+  document.querySelector(selectors.taskDueDate).value = task?.due_date || "";
+  renderProjectOptions(task?.project || "");
+  document.querySelector(selectors.modalSubmit).textContent = isEditing ? "保存" : "添加";
+  document.querySelector(selectors.taskTitle).focus();
+  await loadProjects(task?.project || "");
 }
 
 function closeModal() {
   document.querySelector(selectors.taskModal).hidden = true;
+  state.editingTaskId = null;
 }
 
 document.querySelector(selectors.refresh).addEventListener("click", () => {
@@ -723,14 +912,15 @@ document.querySelector(selectors.autoRefresh).addEventListener("change", () => {
     ? statusTextForPolling(state.data)
     : "自动刷新已关闭";
 });
-document.querySelector(selectors.addTaskButton).addEventListener("click", openModal);
+document.querySelector(selectors.addTaskButton).addEventListener("click", () => openModal());
+document.querySelector(selectors.newProject).addEventListener("click", createProjectFromPrompt);
 document.querySelector(selectors.modalClose).addEventListener("click", closeModal);
 document.querySelector(selectors.modalCancel).addEventListener("click", closeModal);
 document.querySelector(selectors.modalSubmit).addEventListener("click", submitManualTask);
 document.querySelector(selectors.taskModal).addEventListener("click", (e) => {
   if (e.target === e.currentTarget) closeModal();
 });
-document.querySelector(selectors.taskInput).addEventListener("keydown", (e) => {
+document.querySelector(selectors.taskTitle).addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
     submitManualTask();

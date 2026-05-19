@@ -39,13 +39,18 @@ test("processes recording through save, chunk, transcribe, parse, dashboard, and
     }
   });
 
-  assert.equal(result.parsed.my_todos[0], "send plan");
+  assert.equal(result.parsed.my_todos[0].title, "send plan");
 
   const dashboard = await getTodayDashboard(db);
   assert.equal(dashboard.stats.recordings, 1);
   assert.equal(dashboard.stats.pendingTasks, 1);
   assert.equal(dashboard.latest.summary.includes("Team sync"), true);
+  assert.equal(dashboard.latest.summary.includes("TODO"), false);
   assert.deepEqual(dashboard.latest.decisions, ["ship local MVP"]);
+  assert.equal(dashboard.tasks[0].title, "send plan");
+  assert.equal(dashboard.tasks[0].body, "");
+  assert.equal(dashboard.tasks[0].status, "pending_confirm");
+  assert.equal(dashboard.projects[0].name, "录音解析");
   assert.equal(notifications.length, 1);
   assert.equal(notifications[0].body.includes("send plan"), true);
 });

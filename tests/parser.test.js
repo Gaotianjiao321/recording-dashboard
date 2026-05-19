@@ -12,7 +12,7 @@ test("Hermes parser preserves the required structured output", async () => {
       assert.equal(prompt.includes("summary"), true);
       return JSON.stringify({
         summary: "Project sync covered launch readiness.",
-        my_todos: ["Send the release plan"],
+        my_todos: [{ title: "Send the release plan", body: "Share it with the launch group." }],
         waiting_for_others: ["Alice to confirm copy"],
         decisions: ["Ship the local MVP"],
         open_questions: ["Do we need a weekly trend?"],
@@ -25,7 +25,7 @@ test("Hermes parser preserves the required structured output", async () => {
 
   assert.deepEqual(parsed, {
     summary: "Project sync covered launch readiness.",
-    my_todos: ["Send the release plan"],
+    my_todos: [{ title: "Send the release plan", body: "Share it with the launch group." }],
     waiting_for_others: ["Alice to confirm copy"],
     decisions: ["Ship the local MVP"],
     open_questions: ["Do we need a weekly trend?"],
@@ -52,8 +52,9 @@ test("Hermes parser falls back to heuristic parsing when enabled", async () => {
 
   const parsed = await parser("TODO: Review notes. Decision: keep MVP local.");
 
-  assert.equal(parsed.my_todos[0], "Review notes");
+  assert.equal(parsed.my_todos[0].title, "Review notes");
   assert.deepEqual(parsed.decisions, ["keep MVP local"]);
+  assert.equal(parsed.summary.includes("TODO"), false);
 });
 
 test("Hermes parser can fail hard when fallback is disabled", async () => {

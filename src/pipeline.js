@@ -9,11 +9,23 @@ function json(value) {
 }
 
 function notificationBody(parsed) {
-  const firstTodo = parsed.my_todos?.[0] ? ` Todo: ${parsed.my_todos[0]}` : "";
+  const firstTodoTitle = todoTitle(parsed.my_todos?.[0]);
+  const firstTodo = firstTodoTitle ? ` Todo: ${firstTodoTitle}` : "";
   return `${parsed.summary}${firstTodo}`.slice(0, 240);
 }
 
 const allowedTaskStatuses = new Set(["pending_confirm", "in_progress", "done", "dismissed"]);
+
+function todoTitle(todo) {
+  if (!todo) return "";
+  if (typeof todo === "string") return todo;
+  return String(todo.title ?? todo.body ?? "").trim();
+}
+
+function todoBody(todo) {
+  if (!todo || typeof todo === "string") return "";
+  return String(todo.body ?? "").trim();
+}
 
 export async function processRecording(db, recordingPath, services = {}) {
   const chunker = services.chunker ?? ((filePath) => chunkAudio(filePath));
@@ -79,10 +91,21 @@ export async function processRecording(db, recordingPath, services = {}) {
       )
     `);
 
-    for (const title of parsed.my_todos ?? []) {
+    if ((parsed.my_todos ?? []).length) {
+      await createProject(db, "录音解析");
+    }
+
+    for (const todo of parsed.my_todos ?? []) {
       await db.run(`
-        INSERT INTO tasks (recording_id, title, status, priority, project)
-        VALUES (${sqlValue(recordingId)}, ${sqlValue(title)}, 'pending_confirm', 'medium', '录音解析')
+        INSERT INTO tasks (recording_id, title, body, status, priority, project)
+        VALUES (
+          ${sqlValue(recordingId)},
+          ${sqlValue(todoTitle(todo))},
+          ${sqlValue(todoBody(todo))},
+          'pending_confirm',
+          'medium',
+          '录音解析'
+        )
       `);
     }
 
@@ -126,7 +149,7 @@ export async function getTodayDashboard(db) {
     LIMIT 1
   `);
   const tasks = await db.all(`
-    SELECT id, recording_id, title, status, priority, due_date, project, created_at
+    SELECT id, recording_id, title, body, status, priority, due_date, project, created_at
     FROM tasks
     WHERE status != 'dismissed'
     ORDER BY id DESC
@@ -156,9 +179,34 @@ export async function getTodayDashboard(db) {
         }
       : null,
     tasks,
+    projects: groupTasksByProject(tasks),
     recordings,
     notifications
   };
+}
+
+export async function getProjectDashboard(db) {
+  return { projects: groupTasksByProject(await db.all(`
+    SELECT id, recording_id, title, body, status, priority, due_date, project, created_at
+    FROM tasks
+    WHERE status != 'dismissed'
+    ORDER BY id DESC
+  `)) };
+}
+
+export async function listProjects(db) {
+  return db.all(`
+    SELECT id, name, created_at
+    FROM projects
+    ORDER BY lower(name)
+  `);
+}
+
+export async function createProject(db, name) {
+  const normalizedName = String(name ?? "").trim();
+  if (!normalizedName) throw new Error("project name is required");
+  await db.exec(`INSERT OR IGNORE INTO projects (name) VALUES (${sqlValue(normalizedName)})`);
+  return db.get(`SELECT id, name, created_at FROM projects WHERE name = ${sqlValue(normalizedName)}`);
 }
 
 export async function updateTaskStatus(db, taskId, status) {
@@ -171,8 +219,70 @@ export async function updateTaskStatus(db, taskId, status) {
     WHERE id = ${sqlValue(taskId)}
   `);
   return db.get(`
-    SELECT id, recording_id, title, status, priority, due_date, project
+    SELECT id, recording_id, title, body, status, priority, due_date, project
     FROM tasks
     WHERE id = ${sqlValue(taskId)}
   `);
+}
+
+export async function updateTask(db, taskId, input) {
+  const existing = await db.get(`
+    SELECT id, title, body, status, priority, due_date, project
+    FROM tasks
+    WHERE id = ${sqlValue(taskId)}
+  `);
+  if (!existing) throw new Error("task not found");
+
+  const title = String(input.title ?? existing.title).trim();
+  if (!title) throw new Error("title is required");
+  const body = String(input.body ?? existing.body ?? "").trim();
+  const priority = input.priority ?? existing.priority;
+  const status = input.status ?? existing.status;
+  const dueDate = input.due_date === undefined ? existing.due_date : String(input.due_date || "").trim() || null;
+  const project = input.project === undefined ? existing.project : String(input.project || "").trim() || null;
+
+  if (!["high", "medium", "low"].includes(priority)) throw new Error("unsupported task priority");
+  if (!allowedTaskStatuses.has(status)) throw new Error(`Unsupported task status: ${status}`);
+  if (project) await createProject(db, project);
+
+  await db.exec(`
+    UPDATE tasks
+    SET
+      title = ${sqlValue(title)},
+      body = ${sqlValue(body)},
+      priority = ${sqlValue(priority)},
+      due_date = ${sqlValue(dueDate)},
+      project = ${sqlValue(project)},
+      status = ${sqlValue(status)}
+    WHERE id = ${sqlValue(taskId)}
+  `);
+  return db.get(`
+    SELECT id, recording_id, title, body, status, priority, due_date, project
+    FROM tasks
+    WHERE id = ${sqlValue(taskId)}
+  `);
+}
+
+function groupTasksByProject(tasks) {
+  const groups = new Map();
+  for (const task of tasks) {
+    const name = task.project || "未归属";
+    if (!groups.has(name)) {
+      groups.set(name, {
+        name,
+        total: 0,
+        pendingTasks: 0,
+        inProgressTasks: 0,
+        doneTasks: 0,
+        tasks: []
+      });
+    }
+    const group = groups.get(name);
+    group.total += 1;
+    if (task.status === "pending_confirm") group.pendingTasks += 1;
+    if (task.status === "in_progress") group.inProgressTasks += 1;
+    if (task.status === "done") group.doneTasks += 1;
+    group.tasks.push(task);
+  }
+  return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
 }
