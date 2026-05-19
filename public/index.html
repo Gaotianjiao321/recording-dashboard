@@ -17,8 +17,7 @@
           </div>
           <div class="topbar-actions">
             <span id="last-updated" class="sync-chip">等待刷新</span>
-            <input id="recording-upload" class="visually-hidden" type="file" accept=".wav,.mp3,.m4a,audio/wav,audio/mpeg,audio/mp4,audio/x-m4a" />
-            <button id="upload-recording" class="icon-btn secondary" type="button">上传录音</button>
+            <button id="upload-recording" class="icon-btn secondary" type="button">开始录音</button>
             <button id="add-task" class="icon-btn secondary" type="button">手动记录</button>
             <button id="refresh" class="icon-btn" type="button" aria-label="刷新看板">刷新</button>
           </div>
@@ -31,14 +30,14 @@
             <small>今日已进入系统的录音</small>
           </article>
           <article class="kpi-card">
-            <span class="kpi-label">处理中</span>
+            <span class="kpi-label">进行中</span>
             <strong id="processing">0</strong>
-            <small>仍在转写或解析的录音</small>
+            <small>正在推进的个人任务</small>
           </article>
           <article class="kpi-card">
             <span class="kpi-label">待办任务数</span>
             <strong id="pending">0</strong>
-            <small>等待确认的个人任务</small>
+            <small>待确认、进行中和已完成任务</small>
           </article>
         </section>
 
@@ -57,7 +56,7 @@
           </label>
           <span id="board-status" class="board-status">正在加载看板数据</span>
         </section>
-        <p id="upload-status" class="upload-status" role="status">可上传 wav、mp3、m4a 录音文件。</p>
+        <p id="upload-status" class="upload-status" role="status">点击开始录音，停止后自动上传并解析。</p>
 
         <section class="board" aria-label="今日看板">
           <div class="column">
@@ -119,6 +118,22 @@
         <div class="modal-body">
           <label for="task-input">待办内容</label>
           <textarea id="task-input" rows="3" placeholder="输入待办事项..."></textarea>
+          <div class="task-fields">
+            <label>
+              优先级
+              <select id="task-priority">
+                <option value="medium">中</option>
+                <option value="high">高</option>
+                <option value="low">低</option>
+              </select>
+            </label>
+            <label>
+              截止日期
+              <input id="task-due-date" type="date" />
+            </label>
+          </div>
+          <label for="task-project">项目归属</label>
+          <input id="task-project" type="text" placeholder="例如：工作看板" />
         </div>
         <div class="modal-footer">
           <button id="modal-cancel" class="icon-btn secondary" type="button">取消</button>

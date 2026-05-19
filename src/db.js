@@ -4,6 +4,7 @@ import { dirname } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
+const sqliteBusyTimeout = ".timeout 5000";
 
 export function sqlValue(value) {
   if (value === null || value === undefined) return "NULL";
@@ -26,6 +27,7 @@ export class Database {
         file_path TEXT NOT NULL,
         duration_seconds REAL NOT NULL DEFAULT 0,
         status TEXT NOT NULL,
+        source_type TEXT NOT NULL DEFAULT 'recording',
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
       CREATE TABLE IF NOT EXISTS processing_jobs (
@@ -72,6 +74,9 @@ export class Database {
         recording_id INTEGER NOT NULL,
         title TEXT NOT NULL,
         status TEXT NOT NULL,
+        priority TEXT NOT NULL DEFAULT 'medium',
+        due_date TEXT,
+        project TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(recording_id) REFERENCES recordings(id)
       );
@@ -84,16 +89,38 @@ export class Database {
         FOREIGN KEY(recording_id) REFERENCES recordings(id)
       );
     `);
+    await this.ensureColumns("recordings", [
+      { name: "source_type", definition: "TEXT NOT NULL DEFAULT 'recording'" }
+    ]);
+    await this.ensureColumns("tasks", [
+      { name: "priority", definition: "TEXT NOT NULL DEFAULT 'medium'" },
+      { name: "due_date", definition: "TEXT" },
+      { name: "project", definition: "TEXT" }
+    ]);
+    await this.exec(`
+      UPDATE recordings
+      SET source_type = 'manual', status = 'manual'
+      WHERE file_path = 'manual';
+    `);
+  }
+
+  async ensureColumns(table, columns) {
+    const existing = new Set((await this.all(`PRAGMA table_info(${table})`)).map((column) => column.name));
+    for (const column of columns) {
+      if (!existing.has(column.name)) {
+        await this.exec(`ALTER TABLE ${table} ADD COLUMN ${column.name} ${column.definition}`);
+      }
+    }
   }
 
   async exec(sql) {
-    await execFileAsync("sqlite3", [this.filePath, sql], { maxBuffer: 1024 * 1024 * 8 });
+    await execFileAsync("sqlite3", ["-cmd", sqliteBusyTimeout, this.filePath, sql], { maxBuffer: 1024 * 1024 * 8 });
   }
 
   async run(sql) {
     const { stdout } = await execFileAsync(
       "sqlite3",
-      ["-json", this.filePath, `${sql}; SELECT last_insert_rowid() AS id;`],
+      ["-json", "-cmd", sqliteBusyTimeout, this.filePath, `${sql}; SELECT last_insert_rowid() AS id;`],
       { maxBuffer: 1024 * 1024 * 8 }
     );
     const rows = stdout.trim() ? JSON.parse(stdout) : [];
@@ -102,7 +129,7 @@ export class Database {
   }
 
   async all(sql) {
-    const { stdout } = await execFileAsync("sqlite3", ["-json", this.filePath, sql], {
+    const { stdout } = await execFileAsync("sqlite3", ["-json", "-cmd", sqliteBusyTimeout, this.filePath, sql], {
       maxBuffer: 1024 * 1024 * 8
     });
     return stdout.trim() ? JSON.parse(stdout) : [];

@@ -122,7 +122,7 @@ test("marks job failed when parser fails", async () => {
   assert.equal(job.error, "llm parse failed");
 });
 
-test("task confirmation state machine supports confirmed and dismissed", async () => {
+test("task status flow supports pending, in progress, done, and dismissed", async () => {
   const { db } = await createTestDb();
   await processRecording(db, "task.wav", {
     chunker: fakeChunker([{ filePath: "chunk.mp3", position: 0, startSeconds: 0, endSeconds: 10 }]),
@@ -132,7 +132,9 @@ test("task confirmation state machine supports confirmed and dismissed", async (
   });
 
   const task = await db.get("SELECT id FROM tasks LIMIT 1");
-  assert.equal((await updateTaskStatus(db, task.id, "confirmed")).status, "confirmed");
+  assert.equal((await updateTaskStatus(db, task.id, "in_progress")).status, "in_progress");
+  assert.equal((await updateTaskStatus(db, task.id, "done")).status, "done");
+  assert.equal((await updateTaskStatus(db, task.id, "pending_confirm")).status, "pending_confirm");
   assert.equal((await updateTaskStatus(db, task.id, "dismissed")).status, "dismissed");
-  await assert.rejects(updateTaskStatus(db, task.id, "pending_confirm"), /Unsupported task status/);
+  await assert.rejects(updateTaskStatus(db, task.id, "confirmed"), /Unsupported task status/);
 });

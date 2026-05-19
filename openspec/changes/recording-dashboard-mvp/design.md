@@ -14,8 +14,20 @@ SQLite tables:
 - `processing_jobs`
 - `notifications`
 
+Recording source types:
+
+- `recording`
+- `manual`
+
 Task statuses:
 
 - `pending_confirm`
-- `confirmed`
+- `in_progress`
+- `done`
 - `dismissed`
+
+Task metadata:
+
+- `priority`: `high`, `medium`, or `low`
+- `due_date`: optional local date string
+- `project`: optional project ownership label

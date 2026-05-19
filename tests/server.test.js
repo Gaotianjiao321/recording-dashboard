@@ -47,7 +47,15 @@ test("HTTP API processes a recording and exposes dashboard state", async () => {
       method: "POST"
     });
     assert.equal(confirmResponse.status, 200);
-    assert.equal((await confirmResponse.json()).status, "confirmed");
+    assert.equal((await confirmResponse.json()).status, "in_progress");
+
+    const doneResponse = await fetch(`${baseUrl}/api/tasks/${dashboard.tasks[0].id}/status`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status: "done" })
+    });
+    assert.equal(doneResponse.status, 200);
+    assert.equal((await doneResponse.json()).status, "done");
 
     const upload = new FormData();
     upload.append("recording", new Blob(["fake wav bytes"], { type: "audio/wav" }), "meeting.wav");
@@ -82,16 +90,26 @@ test("manual task creation via POST /api/tasks", async () => {
     const res = await fetch(`${baseUrl}/api/tasks`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ title: "手动待办事项" })
+      body: JSON.stringify({
+        title: "手动待办事项",
+        priority: "high",
+        due_date: "2026-05-20",
+        project: "工作看板"
+      })
     });
     assert.equal(res.status, 201);
     const task = await res.json();
     assert.equal(task.title, "手动待办事项");
     assert.equal(task.status, "pending_confirm");
+    assert.equal(task.priority, "high");
+    assert.equal(task.due_date, "2026-05-20");
+    assert.equal(task.project, "工作看板");
     assert.ok(task.id > 0);
 
     const dashboard = await (await fetch(`${baseUrl}/api/dashboard/today`)).json();
     assert.equal(dashboard.stats.pendingTasks, 1);
+    assert.equal(dashboard.stats.recordings, 0);
+    assert.equal(dashboard.recordings.length, 0);
     assert.equal(dashboard.tasks[0].title, "手动待办事项");
 
     const badRes = await fetch(`${baseUrl}/api/tasks`, {

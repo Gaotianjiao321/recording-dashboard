@@ -1,6 +1,5 @@
 const selectors = {
   refresh: "#refresh",
-  uploadInput: "#recording-upload",
   uploadButton: "#upload-recording",
   addTaskButton: "#add-task",
   uploadStatus: "#upload-status",
@@ -24,6 +23,9 @@ const selectors = {
   chipRow: "#chip-row",
   taskModal: "#task-modal",
   taskInput: "#task-input",
+  taskPriority: "#task-priority",
+  taskDueDate: "#task-due-date",
+  taskProject: "#task-project",
   modalClose: "#modal-close",
   modalCancel: "#modal-cancel",
   modalSubmit: "#modal-submit"
@@ -31,11 +33,16 @@ const selectors = {
 
 const normalPollMs = 30_000;
 const activePollMs = 5_000;
-const allowedExtensions = new Set(["wav", "mp3", "m4a"]);
 const state = {
   data: null,
   isRefreshing: false,
   isUploading: false,
+  isRecording: false,
+  recorder: null,
+  recordingChunks: [],
+  recordingStream: null,
+  recordingStartedAt: 0,
+  recordingTimer: null,
   pollTimer: null,
   activeFilter: "today"
 };
@@ -75,44 +82,100 @@ function renderDashboard(data) {
   const latest = data.latest ?? null;
 
   const pendingTasks = tasks.filter((task) => task.status === "pending_confirm");
-  const processingRecordings = recordings.filter((recording) => recording.status === "processing");
-  const doneRecordings = recordings.filter((recording) => recording.status === "processed");
+  const inProgressTasks = tasks.filter((task) => task.status === "in_progress");
+  const doneTasks = tasks.filter((task) => task.status === "done");
 
   setText(selectors.recordings, stats.recordings ?? recordings.length);
-  setText(selectors.processing, stats.processing ?? processingRecordings.length);
-  setText(selectors.pending, stats.pendingTasks ?? pendingTasks.length);
+  setText(selectors.processing, stats.inProgressTasks ?? inProgressTasks.length);
+  setText(selectors.pending, (stats.pendingTasks ?? pendingTasks.length) + (stats.inProgressTasks ?? inProgressTasks.length) + (stats.doneTasks ?? doneTasks.length));
 
-  setText(selectors.pendingCount, pendingTasks.length);
-  setText(selectors.processingCount, processingRecordings.length);
-  setText(selectors.doneCount, doneRecordings.length);
-
-  renderCards(selectors.pendingColumn, pendingTasks.map(createTaskCard), "暂无待确认任务。");
-  renderCards(selectors.processingColumn, processingRecordings.map(createProcessingCard), "暂无处理中的录音。");
-  renderCards(selectors.doneColumn, doneRecordings.map(createDoneCard), "暂无已完成录音。");
+  renderBoard(data, state.activeFilter);
 
   setText(selectors.summary, latest?.summary || "暂无已处理录音。");
   renderInsights(selectors.decisions, latest?.decisions, "暂无决策。");
   renderInsights(selectors.questions, latest?.open_questions, "暂无待解决问题。", "question");
   renderNotifications(notifications);
 
-  const total = Math.max(recordings.length, 1);
-  const completionRate = Math.round((doneRecordings.length / total) * 100);
+  const total = Math.max(tasks.length, 1);
+  const completionRate = Math.round((doneTasks.length / total) * 100);
   document.querySelector(selectors.completionBar).style.width = `${completionRate}%`;
 
   applyFilter(state.activeFilter);
 }
 
+function renderBoard(data, filter) {
+  const tasks = Array.isArray(data.tasks) ? data.tasks : [];
+  const recordings = Array.isArray(data.recordings) ? data.recordings : [];
+
+  if (filter === "recordings") {
+    const pendingRecordings = recordings.filter((recording) => recording.status === "failed");
+    const processingRecordings = recordings.filter((recording) => recording.status === "processing");
+    const doneRecordings = recordings.filter((recording) => recording.status === "processed");
+    setText(selectors.pendingCount, pendingRecordings.length);
+    setText(selectors.processingCount, processingRecordings.length);
+    setText(selectors.doneCount, doneRecordings.length);
+    renderCards(selectors.pendingColumn, pendingRecordings.map(createFailedRecordingCard), "暂无失败录音。");
+    renderCards(selectors.processingColumn, processingRecordings.map(createProcessingCard), "暂无处理中的录音。");
+    renderCards(selectors.doneColumn, doneRecordings.map(createDoneCard), "暂无已完成录音。");
+    return;
+  }
+
+  const pendingTasks = tasks.filter((task) => task.status === "pending_confirm");
+  const inProgressTasks = tasks.filter((task) => task.status === "in_progress");
+  const doneTasks = tasks.filter((task) => task.status === "done");
+  setText(selectors.pendingCount, pendingTasks.length);
+  setText(selectors.processingCount, inProgressTasks.length);
+  setText(selectors.doneCount, doneTasks.length);
+  renderCards(selectors.pendingColumn, pendingTasks.map(createTaskCard), "暂无待确认任务。");
+  renderCards(selectors.processingColumn, inProgressTasks.map(createTaskCard), "暂无进行中任务。");
+  renderCards(selectors.doneColumn, doneTasks.map(createTaskCard), "暂无已完成任务。");
+}
+
 function createTaskCard(task) {
+  const config = taskCardConfig(task);
+  return {
+    tag: config.tag,
+    tagClass: config.tagClass,
+    title: task.title || "未命名任务",
+    meta: task.project || `任务 #${task.id}`,
+    avatar: config.avatar,
+    points: priorityText(task.priority),
+    status: taskMetaText(task),
+    actions: config.actions.map((action) => ({
+      ...action,
+      taskId: task.id,
+      onClick: () => updateTaskStatus(task.id, action.status)
+    }))
+  };
+}
+
+function taskCardConfig(task) {
+  if (task.status === "in_progress") {
+    return {
+      tag: "进行中",
+      tagClass: "tag-processing",
+      avatar: "进",
+      actions: [
+        { label: "完成", variant: "primary", status: "done" },
+        { label: "退回", variant: "ghost", status: "pending_confirm" }
+      ]
+    };
+  }
+  if (task.status === "done") {
+    return {
+      tag: "已完成",
+      tagClass: "tag-done",
+      avatar: "完",
+      actions: [{ label: "重新打开", variant: "ghost", status: "in_progress" }]
+    };
+  }
   return {
     tag: "待确认",
     tagClass: "tag-task",
-    title: task.title || "未命名任务",
-    meta: `任务 #${task.id}`,
     avatar: "待",
-    points: `录音 #${task.recording_id}`,
     actions: [
-      { label: "确认", variant: "primary", taskId: task.id, onClick: () => updateTask(task.id, "confirm") },
-      { label: "忽略", variant: "ghost", taskId: task.id, onClick: () => updateTask(task.id, "dismiss") }
+      { label: "开始", variant: "primary", status: "in_progress" },
+      { label: "忽略", variant: "ghost", status: "dismissed" }
     ]
   };
 }
@@ -138,6 +201,18 @@ function createDoneCard(recording) {
     avatar: "完",
     points: formatDuration(recording.duration_seconds),
     progress: 100
+  };
+}
+
+function createFailedRecordingCard(recording) {
+  return {
+    tag: "失败",
+    tagClass: "tag-note",
+    title: recordingTitle(recording, "录音处理失败"),
+    meta: `录音 #${recording.id}`,
+    avatar: "错",
+    points: formatDuration(recording.duration_seconds),
+    status: "请检查转写或解析配置后重新录制"
   };
 }
 
@@ -293,17 +368,11 @@ function renderEmptyState(message) {
   document.querySelector(selectors.completionBar).style.width = "0%";
 }
 
-async function uploadRecording(file) {
-  const extension = file.name.split(".").pop()?.toLowerCase();
-  if (!allowedExtensions.has(extension)) {
-    setUploadStatus("请选择 wav、mp3 或 m4a 音频文件。", true);
-    return;
-  }
-
+async function uploadRecording(file, name = "browser-recording.webm") {
   const formData = new FormData();
-  formData.append("recording", file);
+  formData.append("recording", file, name);
   state.isUploading = true;
-  setUploadState(true, `正在上传并处理：${file.name}`);
+  setUploadState(true, `正在上传并解析：${name}`);
   scheduleAutoRefresh();
 
   try {
@@ -323,17 +392,20 @@ async function uploadRecording(file) {
   } finally {
     state.isUploading = false;
     setUploadState(false);
-    document.querySelector(selectors.uploadInput).value = "";
     scheduleAutoRefresh();
   }
 }
 
-async function updateTask(taskId, action) {
+async function updateTaskStatus(taskId, status) {
   setTaskButtonsDisabled(taskId, true);
-  document.querySelector(selectors.boardStatus).textContent = action === "confirm" ? "正在确认任务" : "正在忽略任务";
+  document.querySelector(selectors.boardStatus).textContent = taskStatusMessage(status);
 
   try {
-    const response = await fetch(`/api/tasks/${taskId}/${action}`, { method: "POST" });
+    const response = await fetch(`/api/tasks/${taskId}/status`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status })
+    });
     if (!response.ok) {
       const payload = await readJsonResponse(response);
       throw new Error(payload.error || `任务操作失败：${response.status}`);
@@ -359,10 +431,98 @@ function setLoading(isLoading) {
   refreshButton.textContent = isLoading ? "刷新中" : "刷新";
 }
 
-function setUploadState(isUploading, message = "可上传 wav、mp3、m4a 录音文件。") {
+async function toggleRecording() {
+  if (state.isRecording) {
+    stopRecording();
+    return;
+  }
+  await startRecording();
+}
+
+async function startRecording() {
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+    setUploadStatus("当前浏览器不支持网页录音，请使用新版 Chrome 或 Safari。", true);
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mimeType = preferredRecordingMimeType();
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    state.recordingChunks = [];
+    state.recordingStream = stream;
+    state.recorder = recorder;
+    state.recordingStartedAt = Date.now();
+
+    recorder.addEventListener("dataavailable", (event) => {
+      if (event.data.size > 0) state.recordingChunks.push(event.data);
+    });
+    recorder.addEventListener("stop", () => {
+      uploadRecordedAudio(recorder.mimeType || mimeType || "audio/webm");
+    });
+    recorder.start();
+    state.isRecording = true;
+    setUploadState(false);
+    updateRecordingTimer();
+    state.recordingTimer = window.setInterval(updateRecordingTimer, 1000);
+  } catch (error) {
+    setUploadStatus(error.message || "无法访问麦克风。", true);
+    cleanupRecording();
+    console.error(error);
+  }
+}
+
+function stopRecording() {
+  if (state.recorder && state.recorder.state !== "inactive") {
+    setUploadStatus("录音已停止，正在准备上传。");
+    state.recorder.stop();
+  }
+  cleanupRecording();
+}
+
+async function uploadRecordedAudio(mimeType) {
+  const blob = new Blob(state.recordingChunks, { type: mimeType });
+  if (!blob.size) {
+    setUploadStatus("没有录到有效音频。", true);
+    return;
+  }
+  const extension = recordingExtension(mimeType);
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  await uploadRecording(blob, `browser-recording-${stamp}.${extension}`);
+}
+
+function cleanupRecording() {
+  window.clearInterval(state.recordingTimer);
+  state.recordingTimer = null;
+  state.isRecording = false;
+  if (state.recordingStream) {
+    state.recordingStream.getTracks().forEach((track) => track.stop());
+  }
+  state.recordingStream = null;
+  state.recorder = null;
+  setUploadState(state.isUploading);
+}
+
+function preferredRecordingMimeType() {
+  return ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/ogg"].find((type) =>
+    MediaRecorder.isTypeSupported(type)
+  );
+}
+
+function recordingExtension(mimeType) {
+  return mimeType.includes("ogg") ? "ogg" : "webm";
+}
+
+function updateRecordingTimer() {
+  const seconds = Math.max(0, Math.floor((Date.now() - state.recordingStartedAt) / 1000));
+  setUploadStatus(`录制中 ${formatDuration(seconds)}，点击停止后自动上传解析。`);
+}
+
+function setUploadState(isUploading, message = "点击开始录音，停止后自动上传并解析。") {
   const uploadButton = document.querySelector(selectors.uploadButton);
-  uploadButton.disabled = isUploading;
-  uploadButton.textContent = isUploading ? "处理中" : "上传录音";
+  uploadButton.disabled = isUploading && !state.isRecording;
+  uploadButton.textContent = state.isRecording ? "停止录音" : isUploading ? "解析中" : "开始录音";
+  uploadButton.classList.toggle("recording", state.isRecording);
   setUploadStatus(message, false);
 }
 
@@ -403,6 +563,29 @@ function setText(selector, value) {
 
 function recordingTitle(recording, fallback) {
   return recording?.id ? `第 ${recording.id} 条录音 · ${fallback}` : fallback;
+}
+
+function priorityText(priority) {
+  const labels = { high: "高优先级", medium: "中优先级", low: "低优先级" };
+  return labels[priority] ?? labels.medium;
+}
+
+function taskMetaText(task) {
+  const parts = [];
+  if (task.due_date) parts.push(`截止 ${task.due_date}`);
+  if (task.project) parts.push(task.project);
+  parts.push(`任务 #${task.id}`);
+  return parts.join(" · ");
+}
+
+function taskStatusMessage(status) {
+  const messages = {
+    pending_confirm: "正在退回待确认",
+    in_progress: "正在移入进行中",
+    done: "正在标记完成",
+    dismissed: "正在忽略任务"
+  };
+  return messages[status] ?? "正在更新任务";
 }
 
 function formatDuration(seconds) {
@@ -446,33 +629,26 @@ async function readJsonResponse(response) {
 
 function applyFilter(filter) {
   state.activeFilter = filter;
+  if (state.data) renderBoard(state.data, filter);
   document.querySelectorAll(`${selectors.chipRow} .chip`).forEach((chip) => {
     chip.classList.toggle("active", chip.dataset.filter === filter);
   });
 
   const board = document.querySelector(".board");
   const sidebar = document.querySelector(".sidebar");
-  const kpiGrid = document.querySelector(".kpi-grid");
   const columns = document.querySelectorAll(".column");
 
   // Reset all visibility
   board.style.display = "";
-  kpiGrid.style.display = "";
   sidebar.style.display = "";
   columns.forEach((col) => { col.style.display = ""; });
 
   if (filter === "recordings") {
     sidebar.style.display = "none";
-    document.querySelector("#pending-column").closest(".column").style.display = "none";
-    document.querySelector("#processing-column").closest(".column").style.display = "none";
   } else if (filter === "tasks") {
-    kpiGrid.style.display = "none";
     sidebar.style.display = "none";
-    document.querySelector("#processing-column").closest(".column").style.display = "none";
-    document.querySelector("#done-column").closest(".column").style.display = "none";
   } else if (filter === "decisions") {
     board.style.display = "none";
-    kpiGrid.style.display = "none";
   }
 }
 
@@ -489,7 +665,12 @@ async function submitManualTask() {
     const response = await fetch("/api/tasks", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ title })
+      body: JSON.stringify({
+        title,
+        priority: document.querySelector(selectors.taskPriority).value,
+        due_date: document.querySelector(selectors.taskDueDate).value,
+        project: document.querySelector(selectors.taskProject).value
+      })
     });
     if (!response.ok) {
       const payload = await readJsonResponse(response);
@@ -510,6 +691,9 @@ function openModal() {
   const modal = document.querySelector(selectors.taskModal);
   modal.hidden = false;
   document.querySelector(selectors.taskInput).value = "";
+  document.querySelector(selectors.taskPriority).value = "medium";
+  document.querySelector(selectors.taskDueDate).value = "";
+  document.querySelector(selectors.taskProject).value = "";
   document.querySelector(selectors.taskInput).focus();
 }
 
@@ -522,11 +706,7 @@ document.querySelector(selectors.refresh).addEventListener("click", () => {
   refresh();
 });
 document.querySelector(selectors.uploadButton).addEventListener("click", () => {
-  document.querySelector(selectors.uploadInput).click();
-});
-document.querySelector(selectors.uploadInput).addEventListener("change", (event) => {
-  const [file] = event.target.files;
-  if (file) uploadRecording(file);
+  toggleRecording();
 });
 document.querySelector(selectors.autoRefresh).addEventListener("change", () => {
   scheduleAutoRefresh();

@@ -5,7 +5,9 @@ import { basename, extname, join } from "node:path";
 import { Database, sqlValue } from "./db.js";
 import { getTodayDashboard, processRecording, updateTaskStatus } from "./pipeline.js";
 
-const allowedAudioExtensions = new Set([".wav", ".mp3", ".m4a"]);
+const allowedAudioExtensions = new Set([".wav", ".mp3", ".m4a", ".webm", ".ogg"]);
+const allowedPriorities = new Set(["high", "medium", "low"]);
+const allowedTaskStatuses = new Set(["pending_confirm", "in_progress", "done", "dismissed"]);
 
 const contentTypes = {
   ".css": "text/css",
@@ -62,7 +64,7 @@ async function saveUploadedRecording(request, contentType, uploadDir) {
   const upload = parseMultipartFile(await readBody(request), contentType);
   const extension = extname(upload.fileName).toLowerCase();
   if (!allowedAudioExtensions.has(extension)) {
-    throw new Error("only wav, mp3, and m4a audio files are supported");
+    throw new Error("only wav, mp3, m4a, webm, and ogg audio files are supported");
   }
   if (upload.data.length === 0) {
     throw new Error("uploaded recording is empty");
@@ -89,16 +91,38 @@ async function serveStatic(request, response) {
   createReadStream(filePath).pipe(response);
 }
 
-async function createManualTask(db, title) {
+function normalizeTaskInput(body) {
+  const title = typeof body.title === "string" ? body.title.trim() : "";
+  if (!title) throw new Error("title is required");
+
+  const priority = typeof body.priority === "string" && allowedPriorities.has(body.priority) ? body.priority : "medium";
+  const dueDate = typeof body.due_date === "string" && body.due_date.trim() ? body.due_date.trim() : null;
+  const project = typeof body.project === "string" && body.project.trim() ? body.project.trim() : null;
+
+  return { title, priority, dueDate, project };
+}
+
+async function createManualTask(db, input) {
   const manualRecordingId = await db.run(`
-    INSERT INTO recordings (file_path, status, duration_seconds)
-    VALUES ('manual', 'processed', 0)
+    INSERT INTO recordings (file_path, status, source_type, duration_seconds)
+    VALUES ('manual', 'manual', 'manual', 0)
   `);
   const taskId = await db.run(`
-    INSERT INTO tasks (recording_id, title, status)
-    VALUES (${sqlValue(manualRecordingId)}, ${sqlValue(title)}, 'pending_confirm')
+    INSERT INTO tasks (recording_id, title, status, priority, due_date, project)
+    VALUES (
+      ${sqlValue(manualRecordingId)},
+      ${sqlValue(input.title)},
+      'pending_confirm',
+      ${sqlValue(input.priority)},
+      ${sqlValue(input.dueDate)},
+      ${sqlValue(input.project)}
+    )
   `);
-  return db.get(`SELECT id, recording_id, title, status FROM tasks WHERE id = ${sqlValue(taskId)}`);
+  return db.get(`
+    SELECT id, recording_id, title, status, priority, due_date, project
+    FROM tasks
+    WHERE id = ${sqlValue(taskId)}
+  `);
 }
 
 export async function createApp(options = {}) {
@@ -116,10 +140,13 @@ export async function createApp(options = {}) {
 
       if (request.method === "POST" && url.pathname === "/api/tasks") {
         const body = await readJson(request);
-        if (!body.title || typeof body.title !== "string" || !body.title.trim()) {
-          return sendJson(response, 400, { error: "title is required" });
+        let input;
+        try {
+          input = normalizeTaskInput(body);
+        } catch (error) {
+          return sendJson(response, 400, { error: error.message });
         }
-        const task = await createManualTask(db, body.title.trim());
+        const task = await createManualTask(db, input);
         return sendJson(response, 201, task);
       }
 
@@ -139,8 +166,17 @@ export async function createApp(options = {}) {
 
       const taskMatch = url.pathname.match(/^\/api\/tasks\/(\d+)\/(confirm|dismiss)$/);
       if (request.method === "POST" && taskMatch) {
-        const status = taskMatch[2] === "confirm" ? "confirmed" : "dismissed";
+        const status = taskMatch[2] === "confirm" ? "in_progress" : "dismissed";
         return sendJson(response, 200, await updateTaskStatus(db, Number(taskMatch[1]), status));
+      }
+
+      const taskStatusMatch = url.pathname.match(/^\/api\/tasks\/(\d+)\/status$/);
+      if (request.method === "POST" && taskStatusMatch) {
+        const { status } = await readJson(request);
+        if (!allowedTaskStatuses.has(status)) {
+          return sendJson(response, 400, { error: "unsupported task status" });
+        }
+        return sendJson(response, 200, await updateTaskStatus(db, Number(taskStatusMatch[1]), status));
       }
 
       if (request.method === "GET") return serveStatic(request, response);

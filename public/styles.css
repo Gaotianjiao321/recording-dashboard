@@ -133,6 +133,12 @@ h1 {
   color: var(--ink);
 }
 
+.icon-btn.recording {
+  background: var(--pink);
+  border-color: var(--pink);
+  color: var(--paper);
+}
+
 .kpi-grid {
   display: grid;
   gap: 14px;
@@ -699,7 +705,32 @@ h1 {
   width: 100%;
 }
 
-.modal-body textarea:focus {
+.task-fields {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 14px;
+}
+
+.modal-body input,
+.modal-body select {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  font: inherit;
+  margin-top: 8px;
+  padding: 9px 10px;
+  width: 100%;
+}
+
+.modal-body > label[for="task-project"] {
+  margin-top: 14px;
+}
+
+.modal-body textarea:focus,
+.modal-body input:focus,
+.modal-body select:focus {
   border-color: var(--accent);
   outline: none;
   box-shadow: 0 0 0 2px rgba(91, 61, 240, 0.15);

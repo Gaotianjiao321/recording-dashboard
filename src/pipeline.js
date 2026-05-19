@@ -13,6 +13,8 @@ function notificationBody(parsed) {
   return `${parsed.summary}${firstTodo}`.slice(0, 240);
 }
 
+const allowedTaskStatuses = new Set(["pending_confirm", "in_progress", "done", "dismissed"]);
+
 export async function processRecording(db, recordingPath, services = {}) {
   const chunker = services.chunker ?? ((filePath) => chunkAudio(filePath));
   const transcriber = services.transcriber ?? createTranscriber();
@@ -79,8 +81,8 @@ export async function processRecording(db, recordingPath, services = {}) {
 
     for (const title of parsed.my_todos ?? []) {
       await db.run(`
-        INSERT INTO tasks (recording_id, title, status)
-        VALUES (${sqlValue(recordingId)}, ${sqlValue(title)}, 'pending_confirm')
+        INSERT INTO tasks (recording_id, title, status, priority, project)
+        VALUES (${sqlValue(recordingId)}, ${sqlValue(title)}, 'pending_confirm', 'medium', '录音解析')
       `);
     }
 
@@ -112,8 +114,9 @@ export async function processRecording(db, recordingPath, services = {}) {
 
 export async function getTodayDashboard(db) {
   const recordings = await db.all(`
-    SELECT id, file_path, duration_seconds, status, created_at
+    SELECT id, file_path, duration_seconds, status, source_type, created_at
     FROM recordings
+    WHERE source_type != 'manual'
     ORDER BY id DESC
   `);
   const latest = await db.get(`
@@ -123,8 +126,9 @@ export async function getTodayDashboard(db) {
     LIMIT 1
   `);
   const tasks = await db.all(`
-    SELECT id, recording_id, title, status, created_at
+    SELECT id, recording_id, title, status, priority, due_date, project, created_at
     FROM tasks
+    WHERE status != 'dismissed'
     ORDER BY id DESC
   `);
   const notifications = await db.all(`
@@ -137,7 +141,9 @@ export async function getTodayDashboard(db) {
     stats: {
       recordings: recordings.length,
       processing: recordings.filter((recording) => recording.status === "processing").length,
-      pendingTasks: tasks.filter((task) => task.status === "pending_confirm").length
+      pendingTasks: tasks.filter((task) => task.status === "pending_confirm").length,
+      inProgressTasks: tasks.filter((task) => task.status === "in_progress").length,
+      doneTasks: tasks.filter((task) => task.status === "done").length
     },
     latest: latest
       ? {
@@ -156,7 +162,7 @@ export async function getTodayDashboard(db) {
 }
 
 export async function updateTaskStatus(db, taskId, status) {
-  if (!["confirmed", "dismissed"].includes(status)) {
+  if (!allowedTaskStatuses.has(status)) {
     throw new Error(`Unsupported task status: ${status}`);
   }
   await db.exec(`
@@ -164,5 +170,9 @@ export async function updateTaskStatus(db, taskId, status) {
     SET status = ${sqlValue(status)}
     WHERE id = ${sqlValue(taskId)}
   `);
-  return db.get(`SELECT id, recording_id, title, status FROM tasks WHERE id = ${sqlValue(taskId)}`);
+  return db.get(`
+    SELECT id, recording_id, title, status, priority, due_date, project
+    FROM tasks
+    WHERE id = ${sqlValue(taskId)}
+  `);
 }
