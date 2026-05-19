@@ -1,47 +1,101 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Recording Dashboard</title>
+    <title>工作录音看板</title>
+    <link rel="icon" href="data:," />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <main>
-      <header>
-        <div>
-          <p class="eyebrow">Local Mac MVP</p>
-          <h1>Recording Dashboard</h1>
-        </div>
-        <button id="refresh" type="button">Refresh</button>
-      </header>
+    <div class="app-shell">
+      <main class="workspace">
+        <header class="topbar" aria-label="看板顶部">
+          <div>
+            <p class="crumb">本地录音 / 今日工作流</p>
+            <h1>工作录音看板</h1>
+          </div>
+          <div class="topbar-actions">
+            <span id="last-updated" class="sync-chip">等待刷新</span>
+            <button id="refresh" class="icon-btn" type="button" aria-label="刷新看板">刷新</button>
+          </div>
+        </header>
 
-      <section class="stats" aria-label="Today stats">
-        <article><span id="recordings">0</span><small>Recordings</small></article>
-        <article><span id="processing">0</span><small>Processing</small></article>
-        <article><span id="pending">0</span><small>Pending tasks</small></article>
-      </section>
+        <section class="kpi-grid" aria-label="今日关键指标">
+          <article class="kpi-card">
+            <span class="kpi-label">录音总数</span>
+            <strong id="recordings">0</strong>
+            <small>今日已进入系统的录音</small>
+          </article>
+          <article class="kpi-card">
+            <span class="kpi-label">处理中</span>
+            <strong id="processing">0</strong>
+            <small>仍在转写或解析的录音</small>
+          </article>
+          <article class="kpi-card">
+            <span class="kpi-label">待办任务数</span>
+            <strong id="pending">0</strong>
+            <small>等待确认的个人任务</small>
+          </article>
+        </section>
 
-      <section>
-        <h2>Latest Summary</h2>
-        <p id="summary" class="summary">No processed recordings yet.</p>
-      </section>
+        <section class="filterbar" aria-label="看板筛选提示">
+          <span class="filter-label">视图</span>
+          <div class="chip-row">
+            <span class="chip active">今日</span>
+            <span class="chip">录音</span>
+            <span class="chip">任务</span>
+            <span class="chip">决策</span>
+          </div>
+          <div class="filter-spacer"></div>
+          <span id="board-status" class="board-status">正在加载看板数据</span>
+        </section>
 
-      <section class="grid">
-        <div>
-          <h2>Pending Tasks</h2>
-          <ul id="tasks"></ul>
-        </div>
-        <div>
-          <h2>Decisions</h2>
-          <ul id="decisions"></ul>
-        </div>
-        <div>
-          <h2>Open Questions</h2>
-          <ul id="questions"></ul>
-        </div>
-      </section>
-    </main>
+        <section class="board" aria-label="今日看板">
+          <div class="column">
+            <div class="column-head">
+              <div class="column-name"><span class="swatch gray"></span>待办</div>
+              <span id="pending-count" class="column-count">0</span>
+            </div>
+            <div id="pending-column" class="card-stack"></div>
+          </div>
+
+          <div class="column">
+            <div class="column-head">
+              <div class="column-name"><span class="swatch violet"></span>进行中</div>
+              <span id="processing-count" class="column-count">0</span>
+            </div>
+            <div id="processing-column" class="card-stack"></div>
+          </div>
+
+          <div class="column">
+            <div class="column-head">
+              <div class="column-name"><span class="swatch green"></span>已完成</div>
+              <span id="done-count" class="column-count">0</span>
+            </div>
+            <div id="done-column" class="card-stack"></div>
+          </div>
+        </section>
+      </main>
+
+      <aside class="sidebar" aria-label="今日洞察">
+        <section class="sidebar-block">
+          <h2>今日摘要</h2>
+          <p id="summary" class="summary-text">暂无已处理录音。</p>
+          <div class="pulse-bar" aria-hidden="true"><span id="completion-bar"></span></div>
+        </section>
+
+        <section class="sidebar-block">
+          <h2>决策</h2>
+          <div id="decisions" class="insight-list"></div>
+        </section>
+
+        <section class="sidebar-block">
+          <h2>待解决问题</h2>
+          <div id="questions" class="insight-list"></div>
+        </section>
+      </aside>
+    </div>
     <script src="/main.js"></script>
   </body>
 </html>
