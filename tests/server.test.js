@@ -63,3 +63,44 @@ test("HTTP API processes a recording and exposes dashboard state", async () => {
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test("manual task creation via POST /api/tasks", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "recording-dashboard-manual-"));
+  const app = await createApp({
+    dbPath: join(dir, "manual.sqlite"),
+    uploadDir: join(dir, "uploads"),
+    services: {
+      chunker: async () => ({ durationSeconds: 0, chunks: [] }),
+      transcriber: async () => "",
+      parser: parseTranscriptHeuristically,
+      notifier: async () => {}
+    }
+  });
+  const { server, baseUrl } = await listen(app);
+
+  try {
+    const res = await fetch(`${baseUrl}/api/tasks`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "手动待办事项" })
+    });
+    assert.equal(res.status, 201);
+    const task = await res.json();
+    assert.equal(task.title, "手动待办事项");
+    assert.equal(task.status, "pending_confirm");
+    assert.ok(task.id > 0);
+
+    const dashboard = await (await fetch(`${baseUrl}/api/dashboard/today`)).json();
+    assert.equal(dashboard.stats.pendingTasks, 1);
+    assert.equal(dashboard.tasks[0].title, "手动待办事项");
+
+    const badRes = await fetch(`${baseUrl}/api/tasks`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "" })
+    });
+    assert.equal(badRes.status, 400);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

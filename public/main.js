@@ -2,6 +2,7 @@ const selectors = {
   refresh: "#refresh",
   uploadInput: "#recording-upload",
   uploadButton: "#upload-recording",
+  addTaskButton: "#add-task",
   uploadStatus: "#upload-status",
   autoRefresh: "#auto-refresh",
   lastUpdated: "#last-updated",
@@ -19,7 +20,13 @@ const selectors = {
   decisions: "#decisions",
   questions: "#questions",
   notifications: "#notifications",
-  completionBar: "#completion-bar"
+  completionBar: "#completion-bar",
+  chipRow: "#chip-row",
+  taskModal: "#task-modal",
+  taskInput: "#task-input",
+  modalClose: "#modal-close",
+  modalCancel: "#modal-cancel",
+  modalSubmit: "#modal-submit"
 };
 
 const normalPollMs = 30_000;
@@ -29,7 +36,8 @@ const state = {
   data: null,
   isRefreshing: false,
   isUploading: false,
-  pollTimer: null
+  pollTimer: null,
+  activeFilter: "today"
 };
 
 async function refresh() {
@@ -90,6 +98,8 @@ function renderDashboard(data) {
   const total = Math.max(recordings.length, 1);
   const completionRate = Math.round((doneRecordings.length / total) * 100);
   document.querySelector(selectors.completionBar).style.width = `${completionRate}%`;
+
+  applyFilter(state.activeFilter);
 }
 
 function createTaskCard(task) {
@@ -434,6 +444,79 @@ async function readJsonResponse(response) {
   }
 }
 
+function applyFilter(filter) {
+  state.activeFilter = filter;
+  document.querySelectorAll(`${selectors.chipRow} .chip`).forEach((chip) => {
+    chip.classList.toggle("active", chip.dataset.filter === filter);
+  });
+
+  const board = document.querySelector(".board");
+  const sidebar = document.querySelector(".sidebar");
+  const kpiGrid = document.querySelector(".kpi-grid");
+  const columns = document.querySelectorAll(".column");
+
+  // Reset all visibility
+  board.style.display = "";
+  kpiGrid.style.display = "";
+  sidebar.style.display = "";
+  columns.forEach((col) => { col.style.display = ""; });
+
+  if (filter === "recordings") {
+    sidebar.style.display = "none";
+    document.querySelector("#pending-column").closest(".column").style.display = "none";
+    document.querySelector("#processing-column").closest(".column").style.display = "none";
+  } else if (filter === "tasks") {
+    kpiGrid.style.display = "none";
+    sidebar.style.display = "none";
+    document.querySelector("#processing-column").closest(".column").style.display = "none";
+    document.querySelector("#done-column").closest(".column").style.display = "none";
+  } else if (filter === "decisions") {
+    board.style.display = "none";
+    kpiGrid.style.display = "none";
+  }
+}
+
+async function submitManualTask() {
+  const input = document.querySelector(selectors.taskInput);
+  const title = input.value.trim();
+  if (!title) return;
+
+  const submitBtn = document.querySelector(selectors.modalSubmit);
+  submitBtn.disabled = true;
+  submitBtn.textContent = "添加中";
+
+  try {
+    const response = await fetch("/api/tasks", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title })
+    });
+    if (!response.ok) {
+      const payload = await readJsonResponse(response);
+      throw new Error(payload.error || "添加失败");
+    }
+    closeModal();
+    await refresh();
+  } catch (error) {
+    document.querySelector(selectors.boardStatus).textContent = error.message || "添加待办失败";
+    console.error(error);
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "添加";
+  }
+}
+
+function openModal() {
+  const modal = document.querySelector(selectors.taskModal);
+  modal.hidden = false;
+  document.querySelector(selectors.taskInput).value = "";
+  document.querySelector(selectors.taskInput).focus();
+}
+
+function closeModal() {
+  document.querySelector(selectors.taskModal).hidden = true;
+}
+
 document.querySelector(selectors.refresh).addEventListener("click", () => {
   window.clearTimeout(state.pollTimer);
   refresh();
@@ -450,6 +533,27 @@ document.querySelector(selectors.autoRefresh).addEventListener("change", () => {
   document.querySelector(selectors.boardStatus).textContent = document.querySelector(selectors.autoRefresh).checked
     ? statusTextForPolling(state.data)
     : "自动刷新已关闭";
+});
+document.querySelector(selectors.addTaskButton).addEventListener("click", openModal);
+document.querySelector(selectors.modalClose).addEventListener("click", closeModal);
+document.querySelector(selectors.modalCancel).addEventListener("click", closeModal);
+document.querySelector(selectors.modalSubmit).addEventListener("click", submitManualTask);
+document.querySelector(selectors.taskModal).addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) closeModal();
+});
+document.querySelector(selectors.taskInput).addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    submitManualTask();
+  }
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeModal();
+});
+
+document.querySelector(selectors.chipRow).addEventListener("click", (e) => {
+  const chip = e.target.closest(".chip");
+  if (chip?.dataset.filter) applyFilter(chip.dataset.filter);
 });
 
 refresh();

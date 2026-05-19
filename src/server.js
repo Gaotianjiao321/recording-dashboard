@@ -2,7 +2,7 @@ import { createReadStream } from "node:fs";
 import { mkdir, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { basename, extname, join } from "node:path";
-import { Database } from "./db.js";
+import { Database, sqlValue } from "./db.js";
 import { getTodayDashboard, processRecording, updateTaskStatus } from "./pipeline.js";
 
 const allowedAudioExtensions = new Set([".wav", ".mp3", ".m4a"]);
@@ -89,6 +89,18 @@ async function serveStatic(request, response) {
   createReadStream(filePath).pipe(response);
 }
 
+async function createManualTask(db, title) {
+  const manualRecordingId = await db.run(`
+    INSERT INTO recordings (file_path, status, duration_seconds)
+    VALUES ('manual', 'processed', 0)
+  `);
+  const taskId = await db.run(`
+    INSERT INTO tasks (recording_id, title, status)
+    VALUES (${sqlValue(manualRecordingId)}, ${sqlValue(title)}, 'pending_confirm')
+  `);
+  return db.get(`SELECT id, recording_id, title, status FROM tasks WHERE id = ${sqlValue(taskId)}`);
+}
+
 export async function createApp(options = {}) {
   const db = options.db ?? new Database(options.dbPath);
   const uploadDir = options.uploadDir ?? process.env.RECORDINGS_DIR ?? "recordings";
@@ -100,6 +112,15 @@ export async function createApp(options = {}) {
 
       if (request.method === "GET" && url.pathname === "/api/health") {
         return sendJson(response, 200, { ok: true });
+      }
+
+      if (request.method === "POST" && url.pathname === "/api/tasks") {
+        const body = await readJson(request);
+        if (!body.title || typeof body.title !== "string" || !body.title.trim()) {
+          return sendJson(response, 400, { error: "title is required" });
+        }
+        const task = await createManualTask(db, body.title.trim());
+        return sendJson(response, 201, task);
       }
 
       if (request.method === "POST" && url.pathname === "/api/recordings/process") {
