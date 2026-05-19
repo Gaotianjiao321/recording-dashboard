@@ -13,7 +13,7 @@ export function sqlValue(value) {
 }
 
 export class Database {
-  constructor(filePath = "data/recording-dashboard.sqlite") {
+  constructor(filePath = process.env.DATABASE_PATH ?? "data/recording-dashboard.sqlite") {
     this.filePath = filePath;
   }
 
