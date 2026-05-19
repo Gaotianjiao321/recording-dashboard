@@ -100,9 +100,13 @@
                 <option value="failed">失败</option>
               </select>
             </div>
+            <div class="view-toggle">
+              <button id="view-list-btn" class="mini-btn active" title="列表视图">📋</button>
+              <button id="view-grid-btn" class="mini-btn" title="网格视图">🔲</button>
+            </div>
           </div>
           <div class="library-content">
-            <table class="library-table">
+            <table id="library-table" class="library-table">
               <thead>
                 <tr>
                   <th>名称</th>
@@ -115,6 +119,7 @@
               </thead>
               <tbody id="library-list"></tbody>
             </table>
+            <div id="library-grid" class="library-grid" hidden></div>
             <div id="library-empty" class="empty-card" hidden>暂无素材。</div>
           </div>
         </section>

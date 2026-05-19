@@ -26,6 +26,10 @@ const selectors = {
   librarySearch: "#library-search",
   libraryStatusFilter: "#library-status-filter",
   libraryList: "#library-list",
+  libraryTable: "#library-table",
+  libraryGrid: "#library-grid",
+  viewListBtn: "#view-list-btn",
+  viewGridBtn: "#view-grid-btn",
   libraryEmpty: "#library-empty",
   audioPlayerContainer: "#audio-player-container",
   playerFilename: "#player-filename",
@@ -66,6 +70,7 @@ const state = {
   activeFilter: "today",
   librarySearchQuery: "",
   libraryStatusFilter: "all",
+  libraryView: "list",
   projects: [],
   editingTaskId: null
 };
@@ -923,6 +928,7 @@ function closeModal() {
 function renderMaterialLibrary(data) {
   const recordings = Array.isArray(data.recordings) ? data.recordings : [];
   const list = document.querySelector(selectors.libraryList);
+  const grid = document.querySelector(selectors.libraryGrid);
   const empty = document.querySelector(selectors.libraryEmpty);
 
   const filtered = recordings.filter((r) => {
@@ -933,55 +939,128 @@ function renderMaterialLibrary(data) {
 
   if (!filtered.length) {
     list.replaceChildren();
+    grid.replaceChildren();
     empty.hidden = false;
     return;
   }
 
   empty.hidden = true;
-  list.replaceChildren(...filtered.map((r) => {
-    const tr = document.createElement("tr");
+  if (state.libraryView === "list") {
+    list.replaceChildren(...filtered.map((r) => renderLibraryRow(r)));
+  } else {
+    grid.replaceChildren(...filtered.map((r) => renderLibraryCard(r)));
+  }
+}
 
-    const nameTd = document.createElement("td");
-    nameTd.textContent = r.file_path ? r.file_path.split("/").pop() : `录音 #${r.id}`;
+function renderLibraryRow(r) {
+  const tr = document.createElement("tr");
 
-    const durationTd = document.createElement("td");
-    durationTd.textContent = formatDuration(r.duration_seconds);
+  const nameTd = document.createElement("td");
+  nameTd.textContent = r.file_path ? r.file_path.split("/").pop() : `录音 #${r.id}`;
 
-    const sizeTd = document.createElement("td");
-    sizeTd.textContent = formatFileSize(r.file_size);
+  const durationTd = document.createElement("td");
+  durationTd.textContent = formatDuration(r.duration_seconds);
 
-    const timeTd = document.createElement("td");
-    timeTd.textContent = formatDateTime(r.created_at);
+  const sizeTd = document.createElement("td");
+  sizeTd.textContent = formatFileSize(r.file_size);
 
-    const statusTd = document.createElement("td");
-    const badge = document.createElement("span");
-    badge.className = `badge ${r.status}`;
-    badge.textContent = statusLabel(r.status);
-    statusTd.appendChild(badge);
+  const timeTd = document.createElement("td");
+  timeTd.textContent = formatDateTime(r.created_at);
 
-    const actionTd = document.createElement("td");
-    actionTd.className = "library-actions";
+  const statusTd = document.createElement("td");
+  const badge = document.createElement("span");
+  badge.className = `badge ${r.status}`;
+  badge.textContent = statusLabel(r.status);
+  statusTd.appendChild(badge);
 
-    const playBtn = document.createElement("button");
-    playBtn.className = "library-action-btn";
-    playBtn.textContent = "▶ 试听";
-    playBtn.onclick = () => playAudio(r);
+  const actionTd = document.createElement("td");
+  actionTd.className = "library-actions";
 
-    const analyzeBtn = document.createElement("button");
-    analyzeBtn.className = "library-action-btn primary";
+  const playBtn = document.createElement("button");
+  playBtn.className = "library-action-btn";
+  playBtn.textContent = "▶ 试听";
+  playBtn.onclick = () => playAudio(r);
+
+  const analyzeBtn = document.createElement("button");
+  analyzeBtn.className = "library-action-btn primary";
+  if (r.status === "processing") {
+    analyzeBtn.textContent = "⏳ 解析中";
+    analyzeBtn.disabled = true;
+  } else {
     analyzeBtn.textContent = "🪄 解析";
     analyzeBtn.onclick = (e) => reanalyzeRecording(r, e.target);
-    if (r.status === "processing") analyzeBtn.disabled = true;
+  }
+  const deleteBtn = document.createElement("button");
+  deleteBtn.className = "library-action-btn danger";
+  deleteBtn.textContent = "🗑 删除";
+  deleteBtn.onclick = () => deleteRecording(r);
 
-    const deleteBtn = document.createElement("button");
-    deleteBtn.className = "library-action-btn danger";
-    deleteBtn.textContent = "🗑 删除";
-    deleteBtn.onclick = () => deleteRecording(r);
+  actionTd.append(playBtn, analyzeBtn, deleteBtn);
+  tr.append(nameTd, durationTd, sizeTd, timeTd, statusTd, actionTd);
+  return tr;
+}
 
-    actionTd.append(playBtn, analyzeBtn, deleteBtn);
-    tr.append(nameTd, durationTd, sizeTd, timeTd, statusTd, actionTd);
-    return tr;
-  }));
+function renderLibraryCard(r) {
+  const card = document.createElement("div");
+  card.className = "library-card";
+
+  const icon = document.createElement("div");
+  icon.className = "library-card-icon";
+  icon.textContent = "🎙️";
+
+  const name = document.createElement("div");
+  name.className = "library-card-name";
+  name.textContent = r.file_path ? r.file_path.split("/").pop() : `录音 #${r.id}`;
+
+  const meta = document.createElement("div");
+  meta.className = "library-card-meta";
+  meta.textContent = `${formatDuration(r.duration_seconds)} · ${formatFileSize(r.file_size)}`;
+
+  const time = document.createElement("div");
+  time.className = "library-card-meta";
+  time.textContent = formatDateTime(r.created_at);
+
+  const badge = document.createElement("div");
+  badge.className = "library-card-badge";
+  const badgeSpan = document.createElement("span");
+  badgeSpan.className = `badge ${r.status}`;
+  badgeSpan.textContent = statusLabel(r.status);
+  badge.appendChild(badgeSpan);
+
+  const actions = document.createElement("div");
+  actions.className = "library-card-actions";
+
+  const playBtn = document.createElement("button");
+  playBtn.className = "library-action-btn";
+  playBtn.textContent = "▶ 试听";
+  playBtn.onclick = () => playAudio(r);
+
+  const analyzeBtn = document.createElement("button");
+  analyzeBtn.className = "library-action-btn primary";
+  if (r.status === "processing") {
+    analyzeBtn.textContent = "⏳ 解析中";
+    analyzeBtn.disabled = true;
+  } else {
+    analyzeBtn.textContent = "🪄 解析";
+    analyzeBtn.onclick = (e) => reanalyzeRecording(r, e.target);
+  }
+  const deleteBtn = document.createElement("button");
+  deleteBtn.className = "library-action-btn danger";
+  deleteBtn.textContent = "🗑 删除";
+  deleteBtn.onclick = () => deleteRecording(r);
+
+  actions.append(playBtn, analyzeBtn, deleteBtn);
+  card.append(icon, name, meta, time, badge, actions);
+  return card;
+}
+
+function setLibraryView(view) {
+  state.libraryView = view;
+  document.querySelector(selectors.viewListBtn).classList.toggle("active", view === "list");
+  document.querySelector(selectors.viewGridBtn).classList.toggle("active", view === "grid");
+  document.querySelector(selectors.libraryTable).hidden = view !== "list";
+  document.querySelector(selectors.libraryGrid).hidden = view !== "grid";
+  if (state.data) renderMaterialLibrary(state.data);
 }
 
 function formatFileSize(bytes) {
@@ -1140,6 +1219,9 @@ document.querySelector(selectors.libraryStatusFilter).addEventListener("change",
   state.libraryStatusFilter = e.target.value;
   if (state.data) renderMaterialLibrary(state.data);
 });
+
+document.querySelector(selectors.viewListBtn).addEventListener("click", () => setLibraryView("list"));
+document.querySelector(selectors.viewGridBtn).addEventListener("click", () => setLibraryView("grid"));
 
 document.querySelector(selectors.playerClose).addEventListener("click", closeAudioPlayer);
 

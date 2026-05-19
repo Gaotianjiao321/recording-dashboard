@@ -919,6 +919,82 @@ h1 {
   color: var(--accent);
 }
 
+.view-toggle {
+  display: flex;
+  gap: 4px;
+}
+
+.view-toggle .mini-btn {
+  margin-top: 0;
+  padding: 6px 10px;
+}
+
+.view-toggle .mini-btn.active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
+.library-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.library-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  position: relative;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.library-card:hover {
+  box-shadow: var(--shadow);
+  transform: translateY(-2px);
+}
+
+.library-card-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.library-card-name {
+  font-weight: 700;
+  margin-bottom: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-card-meta {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.library-card-badge {
+  margin-bottom: 12px;
+}
+
+.library-card-actions {
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.library-card-actions .library-action-btn {
+  flex: 1;
+  margin-right: 0;
+  padding: 6px 4px;
+}
+
 /* Audio Player */
 .audio-player-container {
   background: rgba(255, 255, 255, 0.95);
