@@ -37,7 +37,7 @@
           <article class="kpi-card">
             <span class="kpi-label">📋 待办任务数</span>
             <strong id="pending">0</strong>
-            <small>待确认、进行中和已完成任务</small>
+            <small>待办、进行中和已完成任务</small>
           </article>
         </section>
 
@@ -45,7 +45,6 @@
           <span class="filter-label">视图</span>
           <div class="chip-row" id="chip-row">
             <button class="chip active" data-filter="today" type="button">📅 今日</button>
-            <button class="chip" data-filter="material-library" type="button">📦 素材库</button>
             <button class="chip" data-filter="recordings" type="button">🎙 录音</button>
             <button class="chip" data-filter="tasks" type="button">📋 任务</button>
             <button class="chip" data-filter="projects" type="button">🗂 项目</button>
@@ -86,43 +85,6 @@
         </section>
 
         <section id="project-board" class="project-board" aria-label="项目视图" hidden></section>
-
-        <section id="material-library" class="material-library" aria-label="素材库" hidden>
-          <div class="library-toolbar">
-            <div class="search-box">
-              <input id="library-search" type="text" placeholder="搜索录音名称..." />
-            </div>
-            <div class="filter-group">
-              <select id="library-status-filter">
-                <option value="all">所有状态</option>
-                <option value="processed">已处理</option>
-                <option value="processing">处理中</option>
-                <option value="failed">失败</option>
-              </select>
-            </div>
-            <div class="view-toggle">
-              <button id="view-list-btn" class="mini-btn active" title="列表视图">📋</button>
-              <button id="view-grid-btn" class="mini-btn" title="网格视图">🔲</button>
-            </div>
-          </div>
-          <div class="library-content">
-            <table id="library-table" class="library-table">
-              <thead>
-                <tr>
-                  <th>名称</th>
-                  <th>时长</th>
-                  <th>大小</th>
-                  <th>上传时间</th>
-                  <th>AI 状态</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody id="library-list"></tbody>
-            </table>
-            <div id="library-grid" class="library-grid" hidden></div>
-            <div id="library-empty" class="empty-card" hidden>暂无素材。</div>
-          </div>
-        </section>
       </main>
 
       <aside class="sidebar" aria-label="今日洞察">
@@ -191,23 +153,6 @@
           <button id="modal-cancel" class="icon-btn secondary" type="button">取消</button>
           <button id="modal-submit" class="icon-btn" type="button">添加</button>
         </div>
-      </div>
-    </div>
-
-    <div id="audio-player-container" class="audio-player-container" hidden>
-      <div class="audio-player">
-        <div class="player-info">
-          <span id="player-filename" class="player-filename">未选择音频</span>
-        </div>
-        <audio id="audio-player" controls></audio>
-        <button id="player-close" class="player-close-btn">&times;</button>
-      </div>
-    </div>
-
-    <div id="drop-overlay" class="drop-overlay" hidden>
-      <div class="drop-message">
-        <div class="drop-icon">☁️</div>
-        <p>松开鼠标以上传到素材库</p>
       </div>
     </div>
 

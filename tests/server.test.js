@@ -74,52 +74,6 @@ test("HTTP API processes a recording and exposes dashboard state", async () => {
   }
 });
 
-test("recording serving and deletion", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "recording-dashboard-serving-"));
-  const uploadDir = join(dir, "uploads");
-  const app = await createApp({
-    dbPath: join(dir, "serving.sqlite"),
-    uploadDir,
-    services: {
-      chunker: async () => ({ durationSeconds: 0, chunks: [] }),
-      transcriber: async () => "",
-      parser: async () => ({ summary: "Test summary" }),
-      notifier: async () => {}
-    }
-  });
-  const { server, baseUrl } = await listen(app);
-
-  try {
-    const upload = new FormData();
-    upload.append("recording", new Blob(["audio content"], { type: "audio/wav" }), "test.wav");
-    const uploadRes = await fetch(`${baseUrl}/api/recordings/process`, {
-      method: "POST",
-      body: upload
-    });
-    const { recordingId } = await uploadRes.json();
-
-    const dashboard = await (await fetch(`${baseUrl}/api/dashboard/today`)).json();
-    const recording = dashboard.recordings.find(r => r.id === recordingId);
-    assert.ok(recording);
-    assert.ok(recording.file_size > 0);
-
-    const fileName = recording.file_path.split(/[/\\]/).pop();
-    const audioRes = await fetch(`${baseUrl}/recordings/${fileName}`);
-    assert.equal(audioRes.status, 200);
-    assert.equal(await audioRes.text(), "audio content");
-
-    const deleteRes = await fetch(`${baseUrl}/api/recordings/${recordingId}`, {
-      method: "DELETE"
-    });
-    assert.equal(deleteRes.status, 200);
-
-    const finalDashboard = await (await fetch(`${baseUrl}/api/dashboard/today`)).json();
-    assert.equal(finalDashboard.stats.recordings, 0);
-  } finally {
-    await new Promise((resolve) => server.close(resolve));
-  }
-});
-
 test("manual task creation via POST /api/tasks", async () => {
   const dir = await mkdtemp(join(tmpdir(), "recording-dashboard-manual-"));
   const app = await createApp({

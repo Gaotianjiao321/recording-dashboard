@@ -229,22 +229,6 @@ export async function createApp(options = {}) {
         }
       }
 
-      const recordingMatch = url.pathname.match(/^\/recordings\/([^/]+)$/);
-      if (request.method === "GET" && recordingMatch && !recordingMatch[1].includes("..")) {
-        const filePath = join(uploadDir, recordingMatch[1]);
-        await stat(filePath);
-        const ext = extname(filePath).toLowerCase();
-        response.writeHead(200, { "content-type": contentTypes[ext] ?? "application/octet-stream" });
-        createReadStream(filePath).pipe(response);
-        return;
-      }
-
-      if (request.method === "DELETE" && url.pathname.match(/^\/api\/recordings\/\d+$/)) {
-        const id = Number(url.pathname.split("/").pop());
-        await db.exec(`DELETE FROM recordings WHERE id = ${sqlValue(id)}`);
-        return sendJson(response, 200, { ok: true });
-      }
-
       if (request.method === "GET") return serveStatic(request, response);
 
       sendJson(response, 404, { error: "not found" });
