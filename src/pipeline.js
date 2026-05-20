@@ -91,11 +91,13 @@ export async function processRecording(db, recordingPath, services = {}) {
       )
     `);
 
-    if ((parsed.my_todos ?? []).length) {
-      await createProject(db, "录音解析");
-    }
+    const todos = Array.isArray(parsed.my_todos) && parsed.my_todos.length > 0 
+      ? parsed.my_todos 
+      : [{ title: "录音解析纪要", body: parsed.summary }];
 
-    for (const todo of parsed.my_todos ?? []) {
+    await createProject(db, "录音解析");
+
+    for (const todo of todos) {
       await db.run(`
         INSERT INTO tasks (recording_id, title, body, status, priority, project)
         VALUES (

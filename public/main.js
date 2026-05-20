@@ -139,11 +139,10 @@ function renderBoard(data, filter) {
     const inProgressTasks = tasks.filter((task) => task.status === "in_progress");
     const doneTasks = tasks.filter((task) => task.status === "done");
     const processingRecordings = recordings.filter((recording) => recording.status === "processing");
-    const doneRecordings = recordings.filter((recording) => recording.status === "processed");
 
     setText(selectors.pendingCount, pendingTasks.length);
     setText(selectors.processingCount, inProgressTasks.length + processingRecordings.length);
-    setText(selectors.doneCount, doneTasks.length + doneRecordings.length);
+    setText(selectors.doneCount, doneTasks.length);
     renderCards(selectors.pendingColumn, pendingTasks.map(createTaskCard), "暂无待办任务。");
     renderCards(
       selectors.processingColumn,
@@ -152,8 +151,8 @@ function renderBoard(data, filter) {
     );
     renderCards(
       selectors.doneColumn,
-      [...doneTasks.map(createTaskCard), ...doneRecordings.map(createDoneCard)],
-      "暂无已完成任务或录音。"
+      doneTasks.map(createTaskCard),
+      "暂无已完成任务。"
     );
     return;
   }
@@ -211,16 +210,17 @@ function renderProjects(data) {
 
 function createTaskCard(task) {
   const config = taskCardConfig(task);
+  const meta = taskMetaText(task);
   return {
     tag: config.tag,
     tagIcon: config.tagIcon,
     tagClass: config.tagClass,
     title: task.title || "未命名任务",
     body: task.body || "",
-    meta: task.project || `任务 #${task.id}`,
+    meta: meta,
     avatar: config.avatar,
     points: priorityText(task.priority),
-    status: taskMetaText(task),
+    status: "",
     actions: [
       { label: "✎ 编辑", variant: "ghost", taskId: task.id, onClick: () => openModal(task) },
       ...config.actions.map((action) => ({
@@ -233,6 +233,7 @@ function createTaskCard(task) {
 }
 
 function taskCardConfig(task) {
+  // ... (rest of the function)
   if (task.status === "in_progress") {
     return {
       tag: "进行中",
@@ -751,8 +752,16 @@ function priorityText(priority) {
 
 function taskMetaText(task) {
   const parts = [];
-  if (task.due_date) parts.push(`截止 ${task.due_date}`);
   if (task.project) parts.push(task.project);
+  if (task.recording_id && task.recording_id !== "manual") {
+    // Note: in practice recording_id might be an integer, 
+    // so we check if it's not a manual flag if the API returns one, 
+    // but getTodayDashboard returns the raw recording_id from DB.
+    // For manual tasks, recording_id points to a recording with source_type='manual'.
+    // Here we just check if it's a number and not null.
+    parts.push(`录音 #${task.recording_id}`);
+  }
+  if (task.due_date) parts.push(`截止 ${task.due_date}`);
   parts.push(`任务 #${task.id}`);
   return parts.join(" · ");
 }
