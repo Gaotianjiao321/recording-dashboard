@@ -20,7 +20,12 @@ const allowedTaskStatuses = new Set(["pending_confirm", "in_progress", "done", "
 const contentTypes = {
   ".css": "text/css",
   ".html": "text/html",
-  ".js": "text/javascript"
+  ".js": "text/javascript",
+  ".wav": "audio/wav",
+  ".mp3": "audio/mpeg",
+  ".m4a": "audio/mp4",
+  ".webm": "audio/webm",
+  ".ogg": "audio/ogg"
 };
 
 async function readBody(request) {
@@ -94,9 +99,18 @@ async function serveStatic(request, response) {
   const url = new URL(request.url, "http://localhost");
   const relativePath = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
   const filePath = join("public", relativePath);
-  await stat(filePath);
-  response.writeHead(200, { "content-type": contentTypes[extname(filePath)] ?? "application/octet-stream" });
-  createReadStream(filePath).pipe(response);
+  try {
+    const s = await stat(filePath);
+    if (s.isDirectory()) throw new Error("not a file");
+    response.writeHead(200, { "content-type": contentTypes[extname(filePath)] ?? "application/octet-stream" });
+    createReadStream(filePath).pipe(response);
+  } catch (error) {
+    if (error.code === "ENOENT" || error.message === "not a file") {
+      sendJson(response, 404, { error: "not found" });
+    } else {
+      throw error;
+    }
+  }
 }
 
 function normalizeTaskInput(body) {
@@ -213,6 +227,22 @@ export async function createApp(options = {}) {
         } catch (error) {
           return sendJson(response, error.message === "task not found" ? 404 : 400, { error: error.message });
         }
+      }
+
+      const recordingMatch = url.pathname.match(/^\/recordings\/([^/]+)$/);
+      if (request.method === "GET" && recordingMatch && !recordingMatch[1].includes("..")) {
+        const filePath = join(uploadDir, recordingMatch[1]);
+        await stat(filePath);
+        const ext = extname(filePath).toLowerCase();
+        response.writeHead(200, { "content-type": contentTypes[ext] ?? "application/octet-stream" });
+        createReadStream(filePath).pipe(response);
+        return;
+      }
+
+      if (request.method === "DELETE" && url.pathname.match(/^\/api\/recordings\/\d+$/)) {
+        const id = Number(url.pathname.split("/").pop());
+        await db.exec(`DELETE FROM recordings WHERE id = ${sqlValue(id)}`);
+        return sendJson(response, 200, { ok: true });
       }
 
       if (request.method === "GET") return serveStatic(request, response);

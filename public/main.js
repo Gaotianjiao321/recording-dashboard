@@ -22,6 +22,20 @@ const selectors = {
   notifications: "#notifications",
   completionBar: "#completion-bar",
   chipRow: "#chip-row",
+  materialLibrary: "#material-library",
+  librarySearch: "#library-search",
+  libraryStatusFilter: "#library-status-filter",
+  libraryList: "#library-list",
+  libraryTable: "#library-table",
+  libraryGrid: "#library-grid",
+  viewListBtn: "#view-list-btn",
+  viewGridBtn: "#view-grid-btn",
+  libraryEmpty: "#library-empty",
+  audioPlayerContainer: "#audio-player-container",
+  playerFilename: "#player-filename",
+  audioPlayer: "#audio-player",
+  playerClose: "#player-close",
+  dropOverlay: "#drop-overlay",
   taskModal: "#task-modal",
   taskModalTitle: "#task-modal-title",
   taskTitle: "#task-title",
@@ -54,6 +68,9 @@ const state = {
   recordingTimer: null,
   pollTimer: null,
   activeFilter: "today",
+  librarySearchQuery: "",
+  libraryStatusFilter: "all",
+  libraryView: "list",
   projects: [],
   editingTaskId: null
 };
@@ -104,6 +121,7 @@ function renderDashboard(data) {
 
   renderBoard(data, state.activeFilter);
   renderProjects(data);
+  renderMaterialLibrary(data);
 
   setText(selectors.summary, latest?.summary || "暂无已处理录音。");
   renderInsights(selectors.decisions, latest?.decisions, "暂无决策。");
@@ -816,17 +834,23 @@ function applyFilter(filter) {
   const kpiGrid = document.querySelector(".kpi-grid");
   const board = document.querySelector(".board");
   const projectBoard = document.querySelector(selectors.projectBoard);
+  const materialLibrary = document.querySelector(selectors.materialLibrary);
   const sidebar = document.querySelector(".sidebar");
   const columns = document.querySelectorAll(".column");
 
-  // KPI cards always visible
+  // Reset all
   kpiGrid.style.display = "";
   board.style.display = "";
   projectBoard.hidden = true;
+  materialLibrary.hidden = true;
   sidebar.style.display = "";
   columns.forEach((col) => { col.style.display = ""; });
 
-  if (filter === "recordings") {
+  if (filter === "material-library") {
+    board.style.display = "none";
+    sidebar.style.display = "none";
+    materialLibrary.hidden = false;
+  } else if (filter === "recordings") {
     sidebar.style.display = "none";
   } else if (filter === "tasks") {
     sidebar.style.display = "none";
@@ -901,6 +925,249 @@ function closeModal() {
   hideNewProjectForm();
 }
 
+function renderMaterialLibrary(data) {
+  const recordings = Array.isArray(data.recordings) ? data.recordings : [];
+  const list = document.querySelector(selectors.libraryList);
+  const grid = document.querySelector(selectors.libraryGrid);
+  const empty = document.querySelector(selectors.libraryEmpty);
+
+  const filtered = recordings.filter((r) => {
+    const matchesSearch = !state.librarySearchQuery || (r.file_path && r.file_path.toLowerCase().includes(state.librarySearchQuery.toLowerCase()));
+    const matchesStatus = state.libraryStatusFilter === "all" || r.status === state.libraryStatusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  if (!filtered.length) {
+    list.replaceChildren();
+    grid.replaceChildren();
+    empty.hidden = false;
+    return;
+  }
+
+  empty.hidden = true;
+  if (state.libraryView === "list") {
+    list.replaceChildren(...filtered.map((r) => renderLibraryRow(r)));
+  } else {
+    grid.replaceChildren(...filtered.map((r) => renderLibraryCard(r)));
+  }
+}
+
+function renderLibraryRow(r) {
+  const tr = document.createElement("tr");
+
+  const nameTd = document.createElement("td");
+  nameTd.textContent = r.file_path ? r.file_path.split("/").pop() : `录音 #${r.id}`;
+
+  const durationTd = document.createElement("td");
+  durationTd.textContent = formatDuration(r.duration_seconds);
+
+  const sizeTd = document.createElement("td");
+  sizeTd.textContent = formatFileSize(r.file_size);
+
+  const timeTd = document.createElement("td");
+  timeTd.textContent = formatDateTime(r.created_at);
+
+  const statusTd = document.createElement("td");
+  const badge = document.createElement("span");
+  badge.className = `badge ${r.status}`;
+  badge.textContent = statusLabel(r.status);
+  statusTd.appendChild(badge);
+
+  const actionTd = document.createElement("td");
+  actionTd.className = "library-actions";
+
+  const playBtn = document.createElement("button");
+  playBtn.className = "library-action-btn";
+  playBtn.textContent = "▶ 试听";
+  playBtn.onclick = () => playAudio(r);
+
+  const analyzeBtn = document.createElement("button");
+  analyzeBtn.className = "library-action-btn primary";
+  if (r.status === "processing") {
+    analyzeBtn.textContent = "⏳ 解析中";
+    analyzeBtn.disabled = true;
+  } else {
+    analyzeBtn.textContent = "🪄 解析";
+    analyzeBtn.onclick = (e) => reanalyzeRecording(r, e.target);
+  }
+  const deleteBtn = document.createElement("button");
+  deleteBtn.className = "library-action-btn danger";
+  deleteBtn.textContent = "🗑 删除";
+  deleteBtn.onclick = () => deleteRecording(r);
+
+  actionTd.append(playBtn, analyzeBtn, deleteBtn);
+  tr.append(nameTd, durationTd, sizeTd, timeTd, statusTd, actionTd);
+  return tr;
+}
+
+function renderLibraryCard(r) {
+  const card = document.createElement("div");
+  card.className = "library-card";
+
+  const icon = document.createElement("div");
+  icon.className = "library-card-icon";
+  icon.textContent = "🎙️";
+
+  const name = document.createElement("div");
+  name.className = "library-card-name";
+  name.textContent = r.file_path ? r.file_path.split("/").pop() : `录音 #${r.id}`;
+
+  const meta = document.createElement("div");
+  meta.className = "library-card-meta";
+  meta.textContent = `${formatDuration(r.duration_seconds)} · ${formatFileSize(r.file_size)}`;
+
+  const time = document.createElement("div");
+  time.className = "library-card-meta";
+  time.textContent = formatDateTime(r.created_at);
+
+  const badge = document.createElement("div");
+  badge.className = "library-card-badge";
+  const badgeSpan = document.createElement("span");
+  badgeSpan.className = `badge ${r.status}`;
+  badgeSpan.textContent = statusLabel(r.status);
+  badge.appendChild(badgeSpan);
+
+  const actions = document.createElement("div");
+  actions.className = "library-card-actions";
+
+  const playBtn = document.createElement("button");
+  playBtn.className = "library-action-btn";
+  playBtn.textContent = "▶ 试听";
+  playBtn.onclick = () => playAudio(r);
+
+  const analyzeBtn = document.createElement("button");
+  analyzeBtn.className = "library-action-btn primary";
+  if (r.status === "processing") {
+    analyzeBtn.textContent = "⏳ 解析中";
+    analyzeBtn.disabled = true;
+  } else {
+    analyzeBtn.textContent = "🪄 解析";
+    analyzeBtn.onclick = (e) => reanalyzeRecording(r, e.target);
+  }
+  const deleteBtn = document.createElement("button");
+  deleteBtn.className = "library-action-btn danger";
+  deleteBtn.textContent = "🗑 删除";
+  deleteBtn.onclick = () => deleteRecording(r);
+
+  actions.append(playBtn, analyzeBtn, deleteBtn);
+  card.append(icon, name, meta, time, badge, actions);
+  return card;
+}
+
+function setLibraryView(view) {
+  state.libraryView = view;
+  document.querySelector(selectors.viewListBtn).classList.toggle("active", view === "list");
+  document.querySelector(selectors.viewGridBtn).classList.toggle("active", view === "grid");
+  document.querySelector(selectors.libraryTable).hidden = view !== "list";
+  document.querySelector(selectors.libraryGrid).hidden = view !== "grid";
+  if (state.data) renderMaterialLibrary(state.data);
+}
+
+function formatFileSize(bytes) {
+  if (!bytes || bytes <= 0) return "-";
+  const units = ["B", "KB", "MB", "GB"];
+  let i = 0;
+  while (bytes >= 1024 && i < units.length - 1) {
+    bytes /= 1024;
+    i++;
+  }
+  return `${bytes.toFixed(1)} ${units[i]}`;
+}
+
+async function deleteRecording(recording) {
+  if (!confirm(`确定要删除录音 ${recording.id} 吗？相关任务不会被删除。`)) return;
+
+  try {
+    const response = await fetch(`/api/recordings/${recording.id}`, {
+      method: "DELETE"
+    });
+    if (!response.ok) throw new Error("删除失败");
+    await refresh();
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+function statusLabel(status) {
+  const labels = {
+    processed: "已处理",
+    processing: "处理中",
+    failed: "失败",
+    manual: "手动"
+  };
+  return labels[status] || status;
+}
+
+function playAudio(recording) {
+  const container = document.querySelector(selectors.audioPlayerContainer);
+  const player = document.querySelector(selectors.audioPlayer);
+  const filename = document.querySelector(selectors.playerFilename);
+
+  filename.textContent = recording.file_path.split("/").pop();
+  player.src = `/recordings/${recording.file_path.split("/").pop()}`;
+  container.hidden = false;
+  player.play();
+}
+
+function closeAudioPlayer() {
+  const container = document.querySelector(selectors.audioPlayerContainer);
+  const player = document.querySelector(selectors.audioPlayer);
+  player.pause();
+  container.hidden = true;
+}
+
+async function reanalyzeRecording(recording, btn) {
+  const oldText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "⏳...";
+
+  try {
+    const response = await fetch("/api/recordings/process", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ path: recording.file_path })
+    });
+    const payload = await readJsonResponse(response);
+    if (!response.ok) throw new Error(payload.error || "解析失败");
+    await refresh();
+  } catch (error) {
+    alert(error.message);
+    btn.textContent = oldText;
+    btn.disabled = false;
+  }
+}
+
+function setupDragAndDrop() {
+  const overlay = document.querySelector(selectors.dropOverlay);
+
+  window.addEventListener("dragenter", (e) => {
+    e.preventDefault();
+    overlay.hidden = false;
+  });
+
+  overlay.addEventListener("dragover", (e) => {
+    e.preventDefault();
+  });
+
+  overlay.addEventListener("dragleave", (e) => {
+    if (e.target === overlay) {
+      overlay.hidden = true;
+    }
+  });
+
+  overlay.addEventListener("drop", async (e) => {
+    e.preventDefault();
+    overlay.hidden = true;
+
+    const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith("audio/"));
+    if (!files.length) return;
+
+    for (const file of files) {
+      await uploadRecording(file, file.name);
+    }
+  });
+}
+
 document.querySelector(selectors.refresh).addEventListener("click", () => {
   window.clearTimeout(state.pollTimer);
   refresh();
@@ -943,4 +1210,20 @@ document.querySelector(selectors.chipRow).addEventListener("click", (e) => {
   if (chip?.dataset.filter) applyFilter(chip.dataset.filter);
 });
 
+document.querySelector(selectors.librarySearch).addEventListener("input", (e) => {
+  state.librarySearchQuery = e.target.value;
+  if (state.data) renderMaterialLibrary(state.data);
+});
+
+document.querySelector(selectors.libraryStatusFilter).addEventListener("change", (e) => {
+  state.libraryStatusFilter = e.target.value;
+  if (state.data) renderMaterialLibrary(state.data);
+});
+
+document.querySelector(selectors.viewListBtn).addEventListener("click", () => setLibraryView("list"));
+document.querySelector(selectors.viewGridBtn).addEventListener("click", () => setLibraryView("grid"));
+
+document.querySelector(selectors.playerClose).addEventListener("click", closeAudioPlayer);
+
+setupDragAndDrop();
 refresh();
