@@ -37,7 +37,17 @@ const selectors = {
   newProjectCancel: "#new-project-cancel",
   modalClose: "#modal-close",
   modalCancel: "#modal-cancel",
-  modalSubmit: "#modal-submit"
+  modalSubmit: "#modal-submit",
+  materialLibrary: "#material-library",
+  libraryContent: "#library-content",
+  libraryStats: "#library-stats",
+  librarySearch: "#library-search",
+  uploadMaterial: "#upload-material",
+  libraryFileInput: "#library-file-input",
+  libraryTabs: "#library-tabs",
+  viewList: "#view-list",
+  viewGrid: "#view-grid",
+  dropOverlay: "#drop-overlay"
 };
 
 const normalPollMs = 30_000;
@@ -55,7 +65,11 @@ const state = {
   pollTimer: null,
   activeFilter: "today",
   projects: [],
-  editingTaskId: null
+  editingTaskId: null,
+  libraryMaterials: [],
+  libraryView: "list",
+  libraryTypeFilter: "all",
+  currentPlayingAudio: null
 };
 
 async function refresh() {
@@ -816,6 +830,7 @@ function applyFilter(filter) {
   const kpiGrid = document.querySelector(".kpi-grid");
   const board = document.querySelector(".board");
   const projectBoard = document.querySelector(selectors.projectBoard);
+  const materialLibrary = document.querySelector(selectors.materialLibrary);
   const sidebar = document.querySelector(".sidebar");
   const columns = document.querySelectorAll(".column");
 
@@ -823,6 +838,7 @@ function applyFilter(filter) {
   kpiGrid.style.display = "";
   board.style.display = "";
   projectBoard.hidden = true;
+  materialLibrary.hidden = true;
   sidebar.style.display = "";
   columns.forEach((col) => { col.style.display = ""; });
 
@@ -834,6 +850,12 @@ function applyFilter(filter) {
     board.style.display = "none";
     projectBoard.hidden = false;
     sidebar.style.display = "none";
+  } else if (filter === "library") {
+    kpiGrid.style.display = "none";
+    board.style.display = "none";
+    materialLibrary.hidden = false;
+    sidebar.style.display = "none";
+    renderMaterialLibrary();
   }
 }
 
@@ -944,3 +966,216 @@ document.querySelector(selectors.chipRow).addEventListener("click", (e) => {
 });
 
 refresh();
+
+/** Material Library Logic **/
+
+function renderMaterialLibrary() {
+  const content = document.querySelector(selectors.libraryContent);
+  const search = document.querySelector(selectors.librarySearch).value.toLowerCase();
+  
+  // Filter materials
+  let filtered = state.libraryMaterials.filter(m => {
+    const matchesSearch = m.name.toLowerCase().includes(search);
+    const matchesType = state.libraryTypeFilter === "all" || m.type === state.libraryTypeFilter;
+    return matchesSearch && matchesType;
+  });
+
+  // Update stats
+  document.querySelector(selectors.libraryStats).textContent = `${filtered.length} 个文件`;
+
+  if (!filtered.length) {
+    content.replaceChildren(renderEmptyCard("暂无素材，请上传文件或更换搜索条件。"));
+    return;
+  }
+
+  const container = document.createElement("div");
+  container.className = state.libraryView === "list" ? "material-list" : "material-grid";
+  
+  container.replaceChildren(...filtered.map(renderMaterialItem));
+  content.replaceChildren(container);
+}
+
+function renderMaterialItem(material) {
+  const item = document.createElement("div");
+  item.className = "material-item";
+  
+  const icon = document.createElement("div");
+  icon.className = `material-icon icon-${material.type}`;
+  icon.textContent = material.type === "audio" ? "🎵" : material.type === "text" ? "📄" : "📦";
+  
+  const info = document.createElement("div");
+  info.className = "material-info";
+  
+  const name = document.createElement("div");
+  name.className = "material-name";
+  name.textContent = material.name;
+  
+  const meta = document.createElement("div");
+  meta.className = "material-meta";
+  
+  const size = document.createElement("span");
+  size.textContent = formatFileSize(material.size);
+  
+  const time = document.createElement("span");
+  time.textContent = formatDateTime(material.createdAt);
+  
+  meta.append(size, time);
+  info.append(name, meta);
+  
+  const controls = document.createElement("div");
+  controls.className = "material-controls";
+  
+  if (material.type === "audio") {
+    const playBtn = document.createElement("button");
+    playBtn.className = "play-btn";
+    playBtn.textContent = "▶";
+    playBtn.onclick = () => playAudio(material, playBtn);
+    controls.append(playBtn);
+  }
+  
+  const deleteBtn = document.createElement("button");
+  deleteBtn.className = "mini-btn secondary";
+  deleteBtn.textContent = "🗑 删除";
+  deleteBtn.onclick = () => deleteMaterial(material.id);
+  
+  controls.append(deleteBtn);
+  
+  item.append(icon, info, controls);
+  return item;
+}
+
+function formatFileSize(bytes) {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+}
+
+function playAudio(material, btn) {
+  if (state.currentPlayingAudio) {
+    state.currentPlayingAudio.pause();
+    if (state.currentPlayingAudio._btn) {
+      state.currentPlayingAudio._btn.textContent = "▶";
+    }
+    if (state.currentPlayingAudio._materialId === material.id) {
+      state.currentPlayingAudio = null;
+      return;
+    }
+  }
+
+  const audio = new Audio(material.url);
+  audio._btn = btn;
+  audio._materialId = material.id;
+  audio.play();
+  btn.textContent = "⏸";
+  state.currentPlayingAudio = audio;
+
+  audio.onended = () => {
+    btn.textContent = "▶";
+    state.currentPlayingAudio = null;
+  };
+}
+
+async function uploadMaterials(files) {
+  for (const file of files) {
+    const id = Math.random().toString(36).substr(2, 9);
+    const type = file.type.startsWith("audio/") ? "audio" : file.type.startsWith("text/") ? "text" : "other";
+    
+    // In a real app, we'd upload to a server. For this MVP, we simulate.
+    const material = {
+      id,
+      name: file.name,
+      type,
+      size: file.size,
+      createdAt: new Date(),
+      url: URL.createObjectURL(file)
+    };
+    
+    state.libraryMaterials.unshift(material);
+  }
+  renderMaterialLibrary();
+  showToast("上传成功");
+}
+
+function deleteMaterial(id) {
+  state.libraryMaterials = state.libraryMaterials.filter(m => m.id !== id);
+  renderMaterialLibrary();
+}
+
+function showToast(message) {
+  const toast = document.createElement("div");
+  toast.className = "sync-chip";
+  toast.style.position = "fixed";
+  toast.style.bottom = "20px";
+  toast.style.right = "20px";
+  toast.style.background = "var(--ink)";
+  toast.style.color = "var(--paper)";
+  toast.style.zIndex = "3000";
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+}
+
+// Drag and Drop
+function setupDragAndDrop() {
+  const overlay = document.querySelector(selectors.dropOverlay);
+  
+  window.addEventListener("dragenter", (e) => {
+    e.preventDefault();
+    overlay.hidden = false;
+  });
+
+  overlay.addEventListener("dragover", (e) => {
+    e.preventDefault();
+  });
+
+  overlay.addEventListener("dragleave", (e) => {
+    e.preventDefault();
+    if (e.target === overlay) overlay.hidden = true;
+  });
+
+  overlay.addEventListener("drop", (e) => {
+    e.preventDefault();
+    overlay.hidden = true;
+    const files = e.dataTransfer.files;
+    if (files.length) uploadMaterials(files);
+  });
+}
+
+// Initialize Library Events
+document.querySelector(selectors.librarySearch).addEventListener("input", renderMaterialLibrary);
+
+document.querySelector(selectors.uploadMaterial).addEventListener("click", () => {
+  document.querySelector(selectors.libraryFileInput).click();
+});
+
+document.querySelector(selectors.libraryFileInput).addEventListener("change", (e) => {
+  if (e.target.files.length) uploadMaterials(e.target.files);
+});
+
+document.querySelector(selectors.libraryTabs).addEventListener("click", (e) => {
+  const tab = e.target.closest(".tab");
+  if (tab) {
+    document.querySelectorAll("#library-tabs .tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    state.libraryTypeFilter = tab.dataset.type;
+    renderMaterialLibrary();
+  }
+});
+
+document.querySelector(selectors.viewList).addEventListener("click", () => {
+  state.libraryView = "list";
+  document.querySelector(selectors.viewList).classList.add("active");
+  document.querySelector(selectors.viewGrid).classList.remove("active");
+  renderMaterialLibrary();
+});
+
+document.querySelector(selectors.viewGrid).addEventListener("click", () => {
+  state.libraryView = "grid";
+  document.querySelector(selectors.viewGrid).classList.add("active");
+  document.querySelector(selectors.viewList).classList.remove("active");
+  renderMaterialLibrary();
+});
+
+setupDragAndDrop();
