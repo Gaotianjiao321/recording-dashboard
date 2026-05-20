@@ -144,7 +144,7 @@ function renderBoard(data, filter) {
     setText(selectors.pendingCount, pendingTasks.length);
     setText(selectors.processingCount, inProgressTasks.length + processingRecordings.length);
     setText(selectors.doneCount, doneTasks.length + doneRecordings.length);
-    renderCards(selectors.pendingColumn, pendingTasks.map(createTaskCard), "暂无待确认任务。");
+    renderCards(selectors.pendingColumn, pendingTasks.map(createTaskCard), "暂无待办任务。");
     renderCards(
       selectors.processingColumn,
       [...inProgressTasks.map(createTaskCard), ...processingRecordings.map(createProcessingCard)],
@@ -164,7 +164,7 @@ function renderBoard(data, filter) {
   setText(selectors.pendingCount, pendingTasks.length);
   setText(selectors.processingCount, inProgressTasks.length);
   setText(selectors.doneCount, doneTasks.length);
-  renderCards(selectors.pendingColumn, pendingTasks.map(createTaskCard), "暂无待确认任务。");
+  renderCards(selectors.pendingColumn, pendingTasks.map(createTaskCard), "暂无待办任务。");
   renderCards(selectors.processingColumn, inProgressTasks.map(createTaskCard), "暂无进行中任务。");
   renderCards(selectors.doneColumn, doneTasks.map(createTaskCard), "暂无已完成任务。");
 }
@@ -241,7 +241,7 @@ function taskCardConfig(task) {
       avatar: "进",
       actions: [
         { label: "✅ 完成", variant: "primary", status: "done" },
-        { label: "↩ 退回", variant: "ghost", status: "pending_confirm" }
+        { label: "↩ 撤回", variant: "ghost", status: "pending_confirm" }
       ]
     };
   }
@@ -251,16 +251,16 @@ function taskCardConfig(task) {
       tagIcon: "✅",
       tagClass: "tag-done",
       avatar: "完",
-      actions: [{ label: "🔓 重新打开", variant: "ghost", status: "in_progress" }]
+      actions: [{ label: "↺ 撤回到进行中", variant: "ghost", status: "in_progress" }]
     };
   }
   return {
-    tag: "待确认",
+    tag: "待办",
     tagIcon: "⏳",
     tagClass: "tag-task",
     avatar: "待",
     actions: [
-      { label: "▶ 开始", variant: "primary", status: "in_progress" },
+      { label: "▶ 进行", variant: "primary", status: "in_progress" },
       { label: "⏭ 忽略", variant: "ghost", status: "dismissed" }
     ]
   };
@@ -456,7 +456,7 @@ function renderEmptyState(message) {
   setText(selectors.processingCount, 0);
   setText(selectors.doneCount, 0);
   setText(selectors.summary, message);
-  renderCards(selectors.pendingColumn, [], "暂无待确认任务。");
+  renderCards(selectors.pendingColumn, [], "暂无待办任务。");
   renderCards(selectors.processingColumn, [], "暂无处理中的录音。");
   renderCards(selectors.doneColumn, [], "暂无已完成录音。");
   renderInsights(selectors.decisions, [], "暂无决策。");
@@ -759,8 +759,8 @@ function taskMetaText(task) {
 
 function taskStatusMessage(status) {
   const messages = {
-    pending_confirm: "正在退回待确认",
-    in_progress: "正在移入进行中",
+    pending_confirm: "正在撤回到待办",
+    in_progress: "正在推进到进行中",
     done: "正在标记完成",
     dismissed: "正在忽略任务"
   };
