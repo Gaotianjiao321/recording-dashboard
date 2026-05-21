@@ -14,7 +14,7 @@ function notificationBody(parsed) {
   return `${parsed.summary}${firstTodo}`.slice(0, 240);
 }
 
-const allowedTaskStatuses = new Set(["pending_confirm", "in_progress", "done", "dismissed"]);
+const allowedTaskStatuses = new Set(["pending_confirm", "in_progress", "waiting", "done", "archived", "dismissed"]);
 
 function todoTitle(todo) {
   if (!todo) return "";
@@ -169,6 +169,7 @@ export async function getTodayDashboard(db) {
       processing: recordings.filter((recording) => recording.status === "processing").length,
       pendingTasks: tasks.filter((task) => task.status === "pending_confirm").length,
       inProgressTasks: tasks.filter((task) => task.status === "in_progress").length,
+      waitingTasks: tasks.filter((task) => task.status === "waiting").length,
       doneTasks: tasks.filter((task) => task.status === "done").length
     },
     latest: latest
@@ -276,6 +277,7 @@ function groupTasksByProject(tasks) {
         total: 0,
         pendingTasks: 0,
         inProgressTasks: 0,
+        waitingTasks: 0,
         doneTasks: 0,
         tasks: []
       });
@@ -284,6 +286,7 @@ function groupTasksByProject(tasks) {
     group.total += 1;
     if (task.status === "pending_confirm") group.pendingTasks += 1;
     if (task.status === "in_progress") group.inProgressTasks += 1;
+    if (task.status === "waiting") group.waitingTasks += 1;
     if (task.status === "done") group.doneTasks += 1;
     group.tasks.push(task);
   }

@@ -15,7 +15,7 @@ import {
 
 const allowedAudioExtensions = new Set([".wav", ".mp3", ".m4a", ".webm", ".ogg"]);
 const allowedPriorities = new Set(["high", "medium", "low"]);
-const allowedTaskStatuses = new Set(["pending_confirm", "in_progress", "done", "dismissed"]);
+const allowedTaskStatuses = new Set(["pending_confirm", "in_progress", "waiting", "done", "archived", "dismissed"]);
 
 const contentTypes = {
   ".css": "text/css",
