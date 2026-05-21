@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>工作录音看板</title>
+    <title>个人工作雷达</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="/styles.css" />
   </head>
@@ -12,8 +12,8 @@
       <main class="workspace">
         <header class="topbar" aria-label="看板顶部">
           <div>
-            <p class="crumb">本地录音 / 今日工作流</p>
-            <h1>工作录音看板</h1>
+            <p class="crumb">个人工作雷达 / 今日工作流</p>
+            <h1>个人工作雷达</h1>
           </div>
           <div class="topbar-actions">
             <span id="last-updated" class="sync-chip">等待刷新</span>
@@ -25,19 +25,24 @@
 
         <section class="kpi-grid" aria-label="今日关键指标">
           <article class="kpi-card">
-            <span class="kpi-label">🎙 录音总数</span>
+            <span class="kpi-label">🎙 今日录音</span>
             <strong id="recordings">0</strong>
-            <small>今日已进入系统的录音</small>
+            <small>今日已录制的音频</small>
           </article>
           <article class="kpi-card">
-            <span class="kpi-label">⚡ 进行中</span>
-            <strong id="processing">0</strong>
-            <small>正在推进的个人任务</small>
-          </article>
-          <article class="kpi-card">
-            <span class="kpi-label">📋 待办任务数</span>
+            <span class="kpi-label">⏳ 待确认</span>
             <strong id="pending">0</strong>
-            <small>待办、进行中和已完成任务</small>
+            <small>AI 识别待确认事项</small>
+          </article>
+          <article class="kpi-card">
+            <span class="kpi-label">📋 我的待办</span>
+            <strong id="processing">0</strong>
+            <small>已确认进行中的任务</small>
+          </article>
+          <article class="kpi-card">
+            <span class="kpi-label">🤝 等待别人</span>
+            <strong id="waiting">0</strong>
+            <small>需要他人回复的任务</small>
           </article>
         </section>
 
@@ -59,7 +64,7 @@
         <section class="board" aria-label="今日看板">
           <div class="column">
             <div class="column-head">
-              <div class="column-name"><span class="swatch gray"></span>⏳ 待办</div>
+              <div class="column-name"><span class="swatch orange"></span>⏳ 待确认</div>
               <span id="pending-count" class="column-count">0</span>
             </div>
             <div id="pending-column" class="card-stack"></div>
@@ -75,35 +80,34 @@
 
           <div class="column">
             <div class="column-head">
-              <div class="column-name"><span class="swatch green"></span>✅ 已完成</div>
-              <span id="done-count" class="column-count">0</span>
+              <div class="column-name"><span class="swatch blue"></span>🤝 等待他人</div>
+              <span id="waiting-count" class="column-count">0</span>
             </div>
-            <div id="done-column" class="card-stack"></div>
+            <div id="waiting-column" class="card-stack"></div>
           </div>
         </section>
 
         <section id="project-board" class="project-board" aria-label="项目视图" hidden></section>
       </main>
 
-      <aside class="sidebar" aria-label="今日洞察">
+      <aside class="sidebar" aria-label="今日简报">
         <section class="sidebar-block">
           <h2>📝 今日摘要</h2>
           <p id="summary" class="summary-text">暂无已处理录音。</p>
-          <div class="pulse-bar" aria-hidden="true"><span id="completion-bar"></span></div>
         </section>
 
         <section class="sidebar-block">
-          <h2>💡 决策</h2>
+          <h2>💡 关键决策</h2>
           <div id="decisions" class="insight-list"></div>
         </section>
 
         <section class="sidebar-block">
-          <h2>❓ 待解决问题</h2>
+          <h2>❓ 开放问题</h2>
           <div id="questions" class="insight-list"></div>
         </section>
 
         <section class="sidebar-block">
-          <h2>🔔 通知</h2>
+          <h2>🎙 最近录音</h2>
           <div id="notifications" class="notification-list"></div>
         </section>
       </aside>

@@ -9,18 +9,18 @@ const selectors = {
   recordings: "#recordings",
   processing: "#processing",
   pending: "#pending",
+  waiting: "#waiting",
   pendingCount: "#pending-count",
   processingCount: "#processing-count",
-  doneCount: "#done-count",
+  waitingCount: "#waiting-count",
   pendingColumn: "#pending-column",
   processingColumn: "#processing-column",
-  doneColumn: "#done-column",
+  waitingColumn: "#waiting-column",
   projectBoard: "#project-board",
   summary: "#summary",
   decisions: "#decisions",
   questions: "#questions",
   notifications: "#notifications",
-  completionBar: "#completion-bar",
   chipRow: "#chip-row",
   taskModal: "#task-modal",
   taskModalTitle: "#task-modal-title",
@@ -96,24 +96,21 @@ function renderDashboard(data) {
 
   const pendingTasks = tasks.filter((task) => task.status === "pending_confirm");
   const inProgressTasks = tasks.filter((task) => task.status === "in_progress");
-  const doneTasks = tasks.filter((task) => task.status === "done");
+  const waitingTasks = tasks.filter((task) => task.status === "waiting");
   const processingRecordings = recordings.filter((recording) => recording.status === "processing");
 
   setText(selectors.recordings, stats.recordings ?? recordings.length);
+  setText(selectors.pending, stats.pendingTasks ?? pendingTasks.length);
   setText(selectors.processing, inProgressTasks.length + processingRecordings.length);
-  setText(selectors.pending, pendingTasks.length);
+  setText(selectors.waiting, stats.waitingTasks ?? waitingTasks.length);
 
   renderBoard(data, state.activeFilter);
   renderProjects(data);
 
   setText(selectors.summary, latest?.summary || "暂无已处理录音。");
   renderInsights(selectors.decisions, latest?.decisions, "暂无决策。");
-  renderInsights(selectors.questions, latest?.open_questions, "暂无待解决问题。", "question");
+  renderInsights(selectors.questions, latest?.open_questions, "暂无开放问题。", "question");
   renderNotifications(notifications);
-
-  const total = Math.max(tasks.length, 1);
-  const completionRate = Math.round((doneTasks.length / total) * 100);
-  document.querySelector(selectors.completionBar).style.width = `${completionRate}%`;
 
   applyFilter(state.activeFilter);
 }
@@ -124,23 +121,23 @@ function renderBoard(data, filter) {
 
   const pendingTasks = tasks.filter((task) => task.status === "pending_confirm");
   const inProgressTasks = tasks.filter((task) => task.status === "in_progress");
-  const doneTasks = tasks.filter((task) => task.status === "done");
+  const waitingTasks = tasks.filter((task) => task.status === "waiting");
   const processingRecordings = recordings.filter((recording) => recording.status === "processing");
 
   setText(selectors.pendingCount, pendingTasks.length);
   setText(selectors.processingCount, inProgressTasks.length + processingRecordings.length);
-  setText(selectors.doneCount, doneTasks.length);
+  setText(selectors.waitingCount, waitingTasks.length);
 
-  renderCards(selectors.pendingColumn, pendingTasks.map(createTaskCard), "暂无待办任务。");
+  renderCards(selectors.pendingColumn, pendingTasks.map(createTaskCard), "暂无待确认事项。");
   renderCards(
     selectors.processingColumn,
     [...inProgressTasks.map(createTaskCard), ...processingRecordings.map(createProcessingCard)],
-    "暂无进行中的任务或录音。"
+    "暂无进行中的任务。"
   );
   renderCards(
-    selectors.doneColumn,
-    doneTasks.map(createTaskCard),
-    "暂无已完成任务。"
+    selectors.waitingColumn,
+    waitingTasks.map(createTaskCard),
+    "暂无等待他人的任务。"
   );
 }
 
@@ -168,7 +165,7 @@ function renderProjects(data) {
       title.textContent = group.name || "未归属";
 
       const stats = document.createElement("span");
-      stats.textContent = `${group.total ?? group.tasks?.length ?? 0} 条 · 待办 ${group.pendingTasks ?? 0} · 进行中 ${group.inProgressTasks ?? 0} · 完成 ${group.doneTasks ?? 0}`;
+      stats.textContent = `${group.total ?? group.tasks?.length ?? 0} 条 · 待确认 ${group.pendingTasks ?? 0} · 进行中 ${group.inProgressTasks ?? 0} · 等待 ${group.waitingTasks ?? 0}`;
 
       const stack = document.createElement("div");
       stack.className = "project-task-stack";
@@ -221,6 +218,18 @@ function taskCardConfig(task) {
       ]
     };
   }
+  if (task.status === "waiting") {
+    return {
+      tag: "等待他人",
+      tagIcon: "🤝",
+      tagClass: "tag-waiting",
+      avatar: "等",
+      actions: [
+        { label: "↩ 收回", variant: "ghost", status: "in_progress" },
+        { label: "✅ 完成", variant: "primary", status: "done" }
+      ]
+    };
+  }
   if (task.status === "done") {
     return {
       tag: "已完成",
@@ -231,12 +240,12 @@ function taskCardConfig(task) {
     };
   }
   return {
-    tag: "待办",
+    tag: "待确认",
     tagIcon: "⏳",
-    tagClass: "tag-task",
+    tagClass: "tag-pending",
     avatar: "待",
     actions: [
-      { label: "▶ 开始", variant: "primary", status: "in_progress" },
+      { label: "✅ 确认", variant: "primary", status: "in_progress" },
       { label: "⏭ 忽略", variant: "ghost", status: "dismissed" }
     ]
   };
@@ -402,15 +411,16 @@ function renderEmptyState(message) {
   setText(selectors.recordings, 0);
   setText(selectors.processing, 0);
   setText(selectors.pending, 0);
+  setText(selectors.waiting, 0);
   setText(selectors.pendingCount, 0);
   setText(selectors.processingCount, 0);
-  setText(selectors.doneCount, 0);
+  setText(selectors.waitingCount, 0);
   setText(selectors.summary, message);
-  renderCards(selectors.pendingColumn, [], "暂无待办任务。");
-  renderCards(selectors.processingColumn, [], "暂无处理中的录音。");
-  renderCards(selectors.doneColumn, [], "暂无已完成录音。");
+  renderCards(selectors.pendingColumn, [], "暂无待确认事项。");
+  renderCards(selectors.processingColumn, [], "暂无进行中的任务。");
+  renderCards(selectors.waitingColumn, [], "暂无等待他人的任务。");
   renderInsights(selectors.decisions, [], "暂无决策。");
-  renderInsights(selectors.questions, [], "暂无待解决问题。", "question");
+  renderInsights(selectors.questions, [], "暂无开放问题。", "question");
   renderNotifications([]);
   document.querySelector(selectors.projectBoard).replaceChildren(renderEmptyCard("暂无项目任务。"));
   document.querySelector(selectors.completionBar).style.width = "0%";
@@ -728,8 +738,9 @@ function taskMetaText(task) {
 
 function taskStatusMessage(status) {
   const messages = {
-    pending_confirm: "正在撤回到待办...",
-    in_progress: "正在推进到进行中...",
+    pending_confirm: "正在撤回到待确认...",
+    in_progress: "正在确认任务...",
+    waiting: "正在标记为等待他人...",
     done: "正在标记为已完成...",
     dismissed: "正在忽略任务..."
   };
