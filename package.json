@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "node src/index.js",
     "test": "node --test",
-    "ai-check": "node --test"
+    "ai-check": "node --test",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.2"
   },
   "engines": {
     "node": ">=22"
