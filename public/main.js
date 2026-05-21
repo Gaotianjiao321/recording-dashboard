@@ -934,6 +934,9 @@ function setupTauriListeners() {
   window.__TAURI__.event.listen("toggle-recording", () => {
     toggleRecording();
   });
+  window.__TAURI__.event.listen("open-dashboard", () => {
+    window.focus();
+  });
 }
 
 async function sendTauriNotification(title, body) {
