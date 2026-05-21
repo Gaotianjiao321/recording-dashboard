@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>设置 - 个人工作雷达</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="settings-shell">
+      <header class="settings-header">
+        <a href="/" class="back-link">← 返回看板</a>
+        <h1>设置</h1>
+      </header>
+
+      <section class="settings-section">
+        <h2>全局快捷键</h2>
+        <p class="settings-desc">设置开始/停止录音的全局快捷键。快捷键在应用隐藏时依然生效。</p>
+
+        <div class="shortcut-row">
+          <label>录音快捷键</label>
+          <div class="shortcut-input-group">
+            <input id="shortcut-display" type="text" readonly placeholder="点击录制快捷键" />
+            <button id="shortcut-record" class="icon-btn secondary" type="button">录制</button>
+            <button id="shortcut-reset" class="icon-btn ghost" type="button">恢复默认</button>
+          </div>
+          <p id="shortcut-warning" class="shortcut-warning" hidden></p>
+        </div>
+
+        <div class="shortcut-presets">
+          <span class="preset-label">预设：</span>
+          <button class="chip" data-shortcut="CmdOrCtrl+Shift+R">⌘⇧R</button>
+          <button class="chip" data-shortcut="CmdOrCtrl+Shift+Space">⌘⇧Space</button>
+          <button class="chip" data-shortcut="Alt+Space">⌥Space</button>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <h2>关于</h2>
+        <p class="settings-desc">个人工作雷达 v0.1.0</p>
+      </section>
+    </div>
+
+    <script src="/settings.js"></script>
+  </body>
+</html>

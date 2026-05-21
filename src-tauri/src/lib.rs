@@ -3,7 +3,57 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use tauri::Emitter;
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+
+fn parse_shortcut(shortcut_str: &str) -> Option<Shortcut> {
+    let mut modifiers = Modifiers::empty();
+    let mut code = None;
+
+    for part in shortcut_str.split('+') {
+        match part {
+            "CmdOrCtrl" | "Super" => modifiers |= Modifiers::SUPER,
+            "Shift" => modifiers |= Modifiers::SHIFT,
+            "Alt" => modifiers |= Modifiers::ALT,
+            "Ctrl" => modifiers |= Modifiers::CONTROL,
+            "Space" => code = Some(Code::Space),
+            key if key.len() == 1 => {
+                let ch = key.chars().next().unwrap().to_ascii_uppercase();
+                code = Some(match ch {
+                    'A' => Code::KeyA,
+                    'B' => Code::KeyB,
+                    'C' => Code::KeyC,
+                    'D' => Code::KeyD,
+                    'E' => Code::KeyE,
+                    'F' => Code::KeyF,
+                    'G' => Code::KeyG,
+                    'H' => Code::KeyH,
+                    'I' => Code::KeyI,
+                    'J' => Code::KeyJ,
+                    'K' => Code::KeyK,
+                    'L' => Code::KeyL,
+                    'M' => Code::KeyM,
+                    'N' => Code::KeyN,
+                    'O' => Code::KeyO,
+                    'P' => Code::KeyP,
+                    'Q' => Code::KeyQ,
+                    'R' => Code::KeyR,
+                    'S' => Code::KeyS,
+                    'T' => Code::KeyT,
+                    'U' => Code::KeyU,
+                    'V' => Code::KeyV,
+                    'W' => Code::KeyW,
+                    'X' => Code::KeyX,
+                    'Y' => Code::KeyY,
+                    'Z' => Code::KeyZ,
+                    _ => return None,
+                });
+            }
+            _ => return None,
+        }
+    }
+
+    code.map(|c| Shortcut::new(Some(modifiers), c))
+}
 
 const SIDECAR_PORT: u16 = 5174;
 const MAX_RESTARTS: u32 = 3;
@@ -106,11 +156,31 @@ fn restart_sidecar() -> bool {
     is_port_in_use(SIDECAR_PORT)
 }
 
+#[tauri::command]
+fn set_shortcut(app: tauri::AppHandle, shortcut: String) -> Result<(), String> {
+    let new_shortcut = parse_shortcut(&shortcut).ok_or("Invalid shortcut format")?;
+
+    app.global_shortcut()
+        .unregister_all()
+        .map_err(|e| format!("Failed to unregister: {}", e))?;
+
+    let handle = app.clone();
+    app.global_shortcut()
+        .on_shortcut(new_shortcut, move |_app, _shortcut, event| {
+            if event.state == ShortcutState::Pressed {
+                let _ = handle.emit("toggle-recording", ());
+            }
+        })
+        .map_err(|e| format!("Failed to register: {}", e))?;
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
-        .invoke_handler(tauri::generate_handler![send_notification, restart_sidecar])
+        .invoke_handler(tauri::generate_handler![send_notification, restart_sidecar, set_shortcut])
         .setup(|app| {
             let handle = app.handle().clone();
             let shortcut = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyR);

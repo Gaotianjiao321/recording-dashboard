@@ -872,4 +872,89 @@ h1 {
   padding: 12px 20px 16px;
 }
 
+.settings-shell {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+.settings-header {
+  margin-bottom: 32px;
+}
+
+.back-link {
+  color: var(--accent);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+.settings-section {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin-bottom: 20px;
+  padding: 20px 24px;
+}
+
+.settings-section h2 {
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+
+.settings-desc {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.shortcut-row {
+  margin-bottom: 16px;
+}
+
+.shortcut-row label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.shortcut-input-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.shortcut-input-group input {
+  font-family: var(--mono);
+  font-size: 16px;
+  padding: 8px 12px;
+  text-align: center;
+  width: 160px;
+}
+
+.shortcut-warning {
+  color: #d6336c;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.shortcut-presets {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.preset-label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.recording {
+  background: rgba(214, 51, 108, 0.1);
+  border-color: var(--pink);
+  color: var(--pink);
+}
 
