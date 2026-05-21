@@ -1,8 +1,12 @@
+mod recording;
+
 use std::process::{Child, Command};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{TrayIconBuilder, MouseButton, MouseButtonState, TrayIconEvent};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 fn parse_shortcut(shortcut_str: &str) -> Option<Shortcut> {
@@ -144,7 +148,6 @@ fn start_sidecar_manager(app: &tauri::App) {
             }
         }
     });
-
 }
 
 #[tauri::command]
@@ -176,26 +179,106 @@ fn set_shortcut(app: tauri::AppHandle, shortcut: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn get_recording_path() -> String {
+    std::env::current_dir()
+        .unwrap_or_default()
+        .join("recordings")
+        .to_string_lossy()
+        .into_owned()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
-        .invoke_handler(tauri::generate_handler![send_notification, restart_sidecar, set_shortcut])
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(move |app, _shortcut, event| {
+                    if event.state == ShortcutState::Pressed {
+                        let _ = app.emit("toggle-recording", ());
+                    }
+                })
+                .build(),
+        )
+        .invoke_handler(tauri::generate_handler![
+            send_notification,
+            restart_sidecar,
+            set_shortcut,
+            recording::start_recording,
+            recording::stop_recording,
+            recording::is_recording,
+            recording::upload_recording,
+            get_recording_path
+        ])
         .setup(|app| {
-            let handle = app.handle().clone();
+            // Register default global shortcut
             let shortcut = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyR);
+            app.global_shortcut().register(shortcut)?;
 
-            handle.plugin(
-                tauri_plugin_global_shortcut::Builder::new()
-                    .with_handler(move |_app, _shortcut, event| {
-                        if event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed {
-                            let _ = _app.emit("toggle-recording", ());
+            // System tray
+            let toggle_item = MenuItem::with_id(app, "toggle", "开始录音 ⌘⇧R", true, None::<&str>)?;
+            let open_item = MenuItem::with_id(app, "open", "打开看板", true, None::<&str>)?;
+            let settings_item = MenuItem::with_id(app, "settings", "设置", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+
+            let menu = Menu::with_items(app, &[&toggle_item, &open_item, &settings_item, &quit_item])?;
+
+            let _tray = TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .menu(&menu)
+                .tooltip("个人工作雷达")
+                .on_menu_event(move |app, event| {
+                    match event.id().as_ref() {
+                        "toggle" => {
+                            let _ = app.emit("toggle-recording", ());
                         }
-                    })
-                    .build(),
-            )?;
+                        "open" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "settings" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                                let _ = window.eval("window.location.href='/settings.html'");
+                            }
+                        }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event {
+                        let app = tray.app_handle();
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                })
+                .build(app)?;
 
-            handle.global_shortcut().register(shortcut)?;
+            // Keep app running when window is closed
+            let app_handle = app.handle().clone();
+            if let Some(window) = app.get_webview_window("main") {
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        if let Some(w) = app_handle.get_webview_window("main") {
+                            let _ = w.hide();
+                        }
+                    }
+                });
+            }
 
             start_sidecar_manager(app);
 
