@@ -194,14 +194,13 @@ function createTaskCard(task) {
     avatar: config.avatar,
     points: priorityText(task.priority),
     status: "",
-    actions: [
-      { label: "✎ 编辑", variant: "ghost", taskId: task.id, onClick: () => openModal(task) },
-      ...config.actions.map((action) => ({
-        ...action,
-        taskId: task.id,
-        onClick: () => updateTaskStatus(task.id, action.status)
-      }))
-    ]
+    isNew: task._isNew,
+    onEdit: () => openModal(task),
+    actions: config.actions.map((action) => ({
+      ...action,
+      taskId: task.id,
+      onClick: () => updateTaskStatus(task.id, action.status)
+    }))
   };
 }
 
@@ -272,10 +271,23 @@ function renderCards(selector, cards, emptyText) {
 function renderCard(card) {
   const article = document.createElement("article");
   article.className = "kanban-card";
+  if (card.isNew) article.classList.add("pulse-new");
 
   const tag = document.createElement("span");
   tag.className = `card-tag ${card.tagClass}`;
   tag.textContent = card.tagIcon ? `${card.tagIcon} ${card.tag}` : card.tag;
+
+  if (card.onEdit) {
+    const editBtn = document.createElement("button");
+    editBtn.className = "card-edit mini-btn";
+    editBtn.textContent = "✎";
+    editBtn.type = "button";
+    editBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      card.onEdit();
+    });
+    article.append(editBtn);
+  }
 
   const title = document.createElement("div");
   title.className = "card-title";
