@@ -345,13 +345,13 @@ h1 {
 }
 
 .tag-task {
-  background: rgba(91, 61, 240, 0.12);
-  color: var(--accent);
+  background: var(--soft);
+  color: var(--muted);
 }
 
 .tag-processing {
-  background: rgba(181, 133, 34, 0.14);
-  color: var(--amber);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .tag-done {
@@ -376,6 +376,7 @@ h1 {
   font-size: 13px;
   line-height: 1.62;
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .card-status {

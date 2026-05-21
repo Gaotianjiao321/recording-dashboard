@@ -97,10 +97,11 @@ function renderDashboard(data) {
   const pendingTasks = tasks.filter((task) => task.status === "pending_confirm");
   const inProgressTasks = tasks.filter((task) => task.status === "in_progress");
   const doneTasks = tasks.filter((task) => task.status === "done");
+  const processingRecordings = recordings.filter((recording) => recording.status === "processing");
 
   setText(selectors.recordings, stats.recordings ?? recordings.length);
-  setText(selectors.processing, stats.inProgressTasks ?? inProgressTasks.length);
-  setText(selectors.pending, (stats.pendingTasks ?? pendingTasks.length) + (stats.inProgressTasks ?? inProgressTasks.length) + (stats.doneTasks ?? doneTasks.length));
+  setText(selectors.processing, inProgressTasks.length + processingRecordings.length);
+  setText(selectors.pending, pendingTasks.length);
 
   renderBoard(data, state.activeFilter);
   renderProjects(data);
@@ -121,51 +122,26 @@ function renderBoard(data, filter) {
   const tasks = Array.isArray(data.tasks) ? data.tasks : [];
   const recordings = Array.isArray(data.recordings) ? data.recordings : [];
 
-  if (filter === "recordings") {
-    const pendingRecordings = recordings.filter((recording) => recording.status === "failed");
-    const processingRecordings = recordings.filter((recording) => recording.status === "processing");
-    const doneRecordings = recordings.filter((recording) => recording.status === "processed");
-    setText(selectors.pendingCount, pendingRecordings.length);
-    setText(selectors.processingCount, processingRecordings.length);
-    setText(selectors.doneCount, doneRecordings.length);
-    renderCards(selectors.pendingColumn, pendingRecordings.map(createFailedRecordingCard), "暂无失败录音。");
-    renderCards(selectors.processingColumn, processingRecordings.map(createProcessingCard), "暂无处理中的录音。");
-    renderCards(selectors.doneColumn, doneRecordings.map(createDoneCard), "暂无已完成录音。");
-    return;
-  }
-
-  if (filter === "today") {
-    const pendingTasks = tasks.filter((task) => task.status === "pending_confirm");
-    const inProgressTasks = tasks.filter((task) => task.status === "in_progress");
-    const doneTasks = tasks.filter((task) => task.status === "done");
-    const processingRecordings = recordings.filter((recording) => recording.status === "processing");
-
-    setText(selectors.pendingCount, pendingTasks.length);
-    setText(selectors.processingCount, inProgressTasks.length + processingRecordings.length);
-    setText(selectors.doneCount, doneTasks.length);
-    renderCards(selectors.pendingColumn, pendingTasks.map(createTaskCard), "暂无待办任务。");
-    renderCards(
-      selectors.processingColumn,
-      [...inProgressTasks.map(createTaskCard), ...processingRecordings.map(createProcessingCard)],
-      "暂无进行中的任务或录音。"
-    );
-    renderCards(
-      selectors.doneColumn,
-      doneTasks.map(createTaskCard),
-      "暂无已完成任务。"
-    );
-    return;
-  }
-
   const pendingTasks = tasks.filter((task) => task.status === "pending_confirm");
   const inProgressTasks = tasks.filter((task) => task.status === "in_progress");
   const doneTasks = tasks.filter((task) => task.status === "done");
+  const processingRecordings = recordings.filter((recording) => recording.status === "processing");
+
   setText(selectors.pendingCount, pendingTasks.length);
-  setText(selectors.processingCount, inProgressTasks.length);
+  setText(selectors.processingCount, inProgressTasks.length + processingRecordings.length);
   setText(selectors.doneCount, doneTasks.length);
+
   renderCards(selectors.pendingColumn, pendingTasks.map(createTaskCard), "暂无待办任务。");
-  renderCards(selectors.processingColumn, inProgressTasks.map(createTaskCard), "暂无进行中任务。");
-  renderCards(selectors.doneColumn, doneTasks.map(createTaskCard), "暂无已完成任务。");
+  renderCards(
+    selectors.processingColumn,
+    [...inProgressTasks.map(createTaskCard), ...processingRecordings.map(createProcessingCard)],
+    "暂无进行中的任务或录音。"
+  );
+  renderCards(
+    selectors.doneColumn,
+    doneTasks.map(createTaskCard),
+    "暂无已完成任务。"
+  );
 }
 
 function renderProjects(data) {
@@ -233,7 +209,6 @@ function createTaskCard(task) {
 }
 
 function taskCardConfig(task) {
-  // ... (rest of the function)
   if (task.status === "in_progress") {
     return {
       tag: "进行中",
@@ -242,7 +217,7 @@ function taskCardConfig(task) {
       avatar: "进",
       actions: [
         { label: "✅ 完成", variant: "primary", status: "done" },
-        { label: "↩ 撤回", variant: "ghost", status: "pending_confirm" }
+        { label: "↩ 退回待办", variant: "ghost", status: "pending_confirm" }
       ]
     };
   }
@@ -252,7 +227,7 @@ function taskCardConfig(task) {
       tagIcon: "✅",
       tagClass: "tag-done",
       avatar: "完",
-      actions: [{ label: "↺ 撤回到进行中", variant: "ghost", status: "in_progress" }]
+      actions: [{ label: "↩ 撤回到进行中", variant: "ghost", status: "in_progress" }]
     };
   }
   return {
@@ -261,7 +236,7 @@ function taskCardConfig(task) {
     tagClass: "tag-task",
     avatar: "待",
     actions: [
-      { label: "▶ 进行", variant: "primary", status: "in_progress" },
+      { label: "▶ 开始", variant: "primary", status: "in_progress" },
       { label: "⏭ 忽略", variant: "ghost", status: "dismissed" }
     ]
   };
@@ -269,40 +244,14 @@ function taskCardConfig(task) {
 
 function createProcessingCard(recording) {
   return {
-    tag: "处理中",
+    tag: "解析中",
     tagIcon: "🔄",
     tagClass: "tag-processing",
     title: recordingTitle(recording, "录音正在转写或解析"),
     meta: `录音 #${recording.id}`,
     avatar: "进",
     points: formatDuration(recording.duration_seconds),
-    status: "处理中，自动刷新会临时加快到 5 秒"
-  };
-}
-
-function createDoneCard(recording) {
-  return {
-    tag: "已处理",
-    tagIcon: "✅",
-    tagClass: "tag-done",
-    title: recordingTitle(recording, "录音已生成纪要"),
-    meta: `录音 #${recording.id}`,
-    avatar: "完",
-    points: formatDuration(recording.duration_seconds),
-    progress: 100
-  };
-}
-
-function createFailedRecordingCard(recording) {
-  return {
-    tag: "失败",
-    tagIcon: "❌",
-    tagClass: "tag-note",
-    title: recordingTitle(recording, "录音处理失败"),
-    meta: `录音 #${recording.id}`,
-    avatar: "错",
-    points: formatDuration(recording.duration_seconds),
-    status: "请检查转写或解析配置后重新录制"
+    status: "解析中，请稍候..."
   };
 }
 
@@ -768,12 +717,12 @@ function taskMetaText(task) {
 
 function taskStatusMessage(status) {
   const messages = {
-    pending_confirm: "正在撤回到待办",
-    in_progress: "正在推进到进行中",
-    done: "正在标记完成",
-    dismissed: "正在忽略任务"
+    pending_confirm: "正在撤回到待办...",
+    in_progress: "正在推进到进行中...",
+    done: "正在标记为已完成...",
+    dismissed: "正在忽略任务..."
   };
-  return messages[status] ?? "正在更新任务";
+  return messages[status] ?? "正在更新任务...";
 }
 
 function formatDuration(seconds) {
@@ -826,20 +775,14 @@ function applyFilter(filter) {
   const board = document.querySelector(".board");
   const projectBoard = document.querySelector(selectors.projectBoard);
   const sidebar = document.querySelector(".sidebar");
-  const columns = document.querySelectorAll(".column");
 
   // Reset all
   kpiGrid.style.display = "";
   board.style.display = "";
   projectBoard.hidden = true;
   sidebar.style.display = "";
-  columns.forEach((col) => { col.style.display = ""; });
 
-  if (filter === "recordings") {
-    sidebar.style.display = "none";
-  } else if (filter === "tasks") {
-    sidebar.style.display = "none";
-  } else if (filter === "projects") {
+  if (filter === "projects") {
     board.style.display = "none";
     projectBoard.hidden = false;
     sidebar.style.display = "none";
