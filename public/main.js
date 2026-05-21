@@ -432,6 +432,8 @@ async function uploadRecording(file, name = "browser-recording.webm") {
     if (!response.ok) {
       throw new Error(payload.error || `录音处理失败：${response.status}`);
     }
+    const taskCount = payload.taskCount ?? 0;
+    sendTauriNotification("解析完成", `识别出 ${taskCount} 条待确认事项`);
     setUploadStatus(`处理完成：录音 #${payload.recordingId}`);
     await refresh();
   } catch (error) {
@@ -510,6 +512,7 @@ async function startRecording() {
     });
     recorder.start();
     state.isRecording = true;
+    sendTauriNotification("录音已开始", "正在录音中...");
     setUploadState(false);
     updateRecordingTimer();
     state.recordingTimer = window.setInterval(updateRecordingTimer, 1000);
@@ -523,6 +526,7 @@ async function startRecording() {
 function stopRecording() {
   if (state.recorder && state.recorder.state !== "inactive") {
     setUploadStatus("录音已停止，正在准备上传。");
+    sendTauriNotification("录音已结束", "正在解析中...");
     state.recorder.stop();
   }
   cleanupRecording();
@@ -902,4 +906,21 @@ document.querySelector(selectors.chipRow).addEventListener("click", (e) => {
   if (chip?.dataset.filter) applyFilter(chip.dataset.filter);
 });
 
+function setupTauriListeners() {
+  if (!window.__TAURI__) return;
+  window.__TAURI__.event.listen("toggle-recording", () => {
+    toggleRecording();
+  });
+}
+
+async function sendTauriNotification(title, body) {
+  if (!window.__TAURI__) return;
+  try {
+    await window.__TAURI__.core.invoke("send_notification", { title, body });
+  } catch {
+    // notifications are best-effort
+  }
+}
+
 refresh();
+setupTauriListeners();
