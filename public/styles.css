@@ -253,7 +253,7 @@ h1 {
 }
 
 .board {
-  align-items: flex-start;
+  align-items: stretch;
   display: grid;
   gap: 14px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1018,4 +1018,3 @@ h1 {
   border-color: var(--pink);
   color: var(--pink);
 }
-
