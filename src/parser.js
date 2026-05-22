@@ -38,7 +38,7 @@ function summarizeTranscript(transcript, taskCount) {
 
   if (summary) return summary.slice(0, 220);
   if (taskCount > 0) return `录音已解析，生成了 ${taskCount} 个待办。`;
-  return "Recording processed with no transcript text.";
+  return "录音已处理，未提取到有效文本。";
 }
 
 function buildPrompt(transcript) {
@@ -116,7 +116,7 @@ export function normalizeParsedResult(value) {
   }
 
   return {
-    summary: String(value.summary ?? "").trim() || "Recording processed with no transcript text.",
+    summary: String(value.summary ?? "").trim() || "录音已处理，未提取到有效文本。",
     my_todos: normalizeTodos(value.my_todos),
     waiting_for_others: normalizeArray(value.waiting_for_others),
     decisions: normalizeArray(value.decisions),
@@ -126,6 +126,18 @@ export function normalizeParsedResult(value) {
 }
 
 export function parseTranscriptHeuristically(transcript) {
+  const trimmed = (transcript ?? "").trim();
+  if (!trimmed) {
+    return {
+      summary: "录音已保存，但转写服务未配置，无法自动解析内容。请配置腾讯云 ASR 或提供转写文本后重新解析。",
+      my_todos: [{ title: "录音待解析", body: "转写服务未配置，录音内容无法自动提取。请配置 ASR 后重新处理。" }],
+      waiting_for_others: [],
+      decisions: [],
+      open_questions: [],
+      ideas: []
+    };
+  }
+
   const todos = collectPrefixedLines(transcript, "TODO");
   const decisions = collectPrefixedLines(transcript, "Decision");
   const openQuestions = collectPrefixedLines(transcript, "Question");

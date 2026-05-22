@@ -1,5 +1,4 @@
 const selectors = {
-  refresh: "#refresh",
   uploadButton: "#upload-recording",
   addTaskButton: "#add-task",
   uploadStatus: "#upload-status",
@@ -60,7 +59,6 @@ const state = {
 async function refresh() {
   if (state.isRefreshing) return;
   state.isRefreshing = true;
-  setLoading(true);
 
   try {
     const response = await fetch("/api/dashboard/today");
@@ -81,7 +79,6 @@ async function refresh() {
     console.error(error);
   } finally {
     state.isRefreshing = false;
-    setLoading(false);
     scheduleAutoRefresh();
   }
 }
@@ -525,12 +522,6 @@ function setTaskButtonsDisabled(taskId, disabled) {
   });
 }
 
-function setLoading(isLoading) {
-  const refreshButton = document.querySelector(selectors.refresh);
-  refreshButton.disabled = isLoading;
-  refreshButton.textContent = isLoading ? "刷新中" : "刷新";
-}
-
 async function toggleRecording() {
   if (state.isRecording) {
     stopRecording();
@@ -710,8 +701,11 @@ function hasProcessing(data) {
 }
 
 function statusTextForPolling(data) {
-  const seconds = pollIntervalMs(data) / 1000;
-  return hasProcessing(data) || state.isUploading ? `处理中，${seconds} 秒后自动刷新` : `看板数据已同步，${seconds} 秒后自动刷新`;
+  if (hasProcessing(data) || state.isUploading) {
+    const seconds = pollIntervalMs(data) / 1000;
+    return `处理中，${seconds} 秒后自动刷新`;
+  }
+  return "";
 }
 
 function setText(selector, value) {
@@ -956,10 +950,6 @@ function closeModal() {
   hideNewProjectForm();
 }
 
-document.querySelector(selectors.refresh).addEventListener("click", () => {
-  window.clearTimeout(state.pollTimer);
-  refresh();
-});
 document.querySelector(selectors.uploadButton).addEventListener("click", () => {
   toggleRecording();
 });
