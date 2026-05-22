@@ -146,7 +146,7 @@ h1 {
 .kpi-grid {
   display: grid;
   gap: 14px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-bottom: 16px;
 }
 
@@ -155,7 +155,7 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 12px;
   box-shadow: var(--shadow);
-  min-height: 128px;
+  min-height: 120px;
   padding: 18px;
 }
 
@@ -170,7 +170,7 @@ h1 {
 
 .kpi-card strong {
   display: block;
-  font-size: 34px;
+  font-size: 32px;
   letter-spacing: 0;
   line-height: 1;
 }
@@ -178,6 +178,7 @@ h1 {
 .kpi-card small {
   color: var(--muted);
   display: block;
+  font-size: 11px;
   margin-top: 9px;
 }
 
@@ -323,7 +324,21 @@ h1 {
   flex-direction: column;
   gap: 10px;
   padding: 13px 14px;
-  transition: border-color 0.16s, box-shadow 0.16s, transform 0.16s;
+  transition: border-color 0.16s, box-shadow 0.16s, transform 0.16s, background-color 0.16s;
+}
+
+.kanban-card.card-task {
+  background-color: #f9f9fc;
+}
+
+.kanban-card.card-processing {
+  background-color: #f3f0ff; /* Light violet */
+  border-color: rgba(91, 61, 240, 0.15);
+}
+
+.kanban-card.card-done {
+  background-color: #f1f9f4; /* Light green */
+  border-color: rgba(44, 138, 79, 0.15);
 }
 
 .kanban-card:hover {
