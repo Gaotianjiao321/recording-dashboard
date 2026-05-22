@@ -9,6 +9,7 @@ const selectors = {
   recordings: "#recordings",
   processing: "#processing",
   pending: "#pending",
+  doneStats: "#done-stats",
   pendingCount: "#pending-count",
   processingCount: "#processing-count",
   doneCount: "#done-count",
@@ -102,6 +103,7 @@ function renderDashboard(data) {
   setText(selectors.recordings, stats.recordings ?? recordings.length);
   setText(selectors.processing, inProgressTasks.length + processingRecordings.length);
   setText(selectors.pending, pendingTasks.length);
+  setText(selectors.doneStats, doneTasks.length);
 
   renderBoard(data, state.activeFilter);
   renderProjects(data);
@@ -168,7 +170,7 @@ function renderProjects(data) {
       title.textContent = group.name || "未归属";
 
       const stats = document.createElement("span");
-      stats.textContent = `${group.total ?? group.tasks?.length ?? 0} 条 · 待办 ${group.pendingTasks ?? 0} · 进行中 ${group.inProgressTasks ?? 0} · 完成 ${group.doneTasks ?? 0}`;
+      stats.textContent = `${group.total ?? group.tasks?.length ?? 0} 条 · 待确认 ${group.pendingTasks ?? 0} · 待办 ${group.inProgressTasks ?? 0} · 完成 ${group.doneTasks ?? 0}`;
 
       const stack = document.createElement("div");
       stack.className = "project-task-stack";
@@ -211,13 +213,13 @@ function createTaskCard(task) {
 function taskCardConfig(task) {
   if (task.status === "in_progress") {
     return {
-      tag: "进行中",
+      tag: "今日待办",
       tagIcon: "🔄",
       tagClass: "tag-processing",
-      avatar: "进",
+      avatar: "待",
       actions: [
         { label: "✅ 完成", variant: "primary", status: "done" },
-        { label: "↩ 退回待办", variant: "ghost", status: "pending_confirm" }
+        { label: "↩ 退回待确认", variant: "ghost", status: "pending_confirm" }
       ]
     };
   }
@@ -231,12 +233,12 @@ function taskCardConfig(task) {
     };
   }
   return {
-    tag: "待办",
+    tag: "待确认",
     tagIcon: "⏳",
     tagClass: "tag-task",
-    avatar: "待",
+    avatar: "审",
     actions: [
-      { label: "▶ 开始", variant: "primary", status: "in_progress" },
+      { label: "▶ 确认", variant: "primary", status: "in_progress" },
       { label: "⏭ 忽略", variant: "ghost", status: "dismissed" }
     ]
   };
@@ -263,6 +265,9 @@ function renderCards(selector, cards, emptyText) {
 function renderCard(card) {
   const article = document.createElement("article");
   article.className = "kanban-card";
+  if (card.tagClass) {
+    article.classList.add(card.tagClass.replace("tag-", "card-"));
+  }
 
   const tag = document.createElement("span");
   tag.className = `card-tag ${card.tagClass}`;
@@ -717,8 +722,8 @@ function taskMetaText(task) {
 
 function taskStatusMessage(status) {
   const messages = {
-    pending_confirm: "正在撤回到待办...",
-    in_progress: "正在推进到进行中...",
+    pending_confirm: "正在撤回到待确认...",
+    in_progress: "正在确认并加入待办...",
     done: "正在标记为已完成...",
     dismissed: "正在忽略任务..."
   };
