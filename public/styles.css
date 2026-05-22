@@ -418,7 +418,7 @@ h1 {
 
 .avatar {
   align-items: center;
-  background: linear-gradient(135deg, var(--accent), #a991ff);
+  background: var(--muted);
   border-radius: 50%;
   color: var(--paper);
   display: inline-flex;
@@ -428,6 +428,18 @@ h1 {
   height: 24px;
   justify-content: center;
   width: 24px;
+}
+
+.kanban-card.card-task .avatar {
+  background: var(--muted);
+}
+
+.kanban-card.card-processing .avatar {
+  background: linear-gradient(135deg, var(--accent), #a991ff);
+}
+
+.kanban-card.card-done .avatar {
+  background: var(--green);
 }
 
 .points {
