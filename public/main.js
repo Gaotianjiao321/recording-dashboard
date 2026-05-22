@@ -1,9 +1,7 @@
 const selectors = {
-  refresh: "#refresh",
   uploadButton: "#upload-recording",
   addTaskButton: "#add-task",
   uploadStatus: "#upload-status",
-  autoRefresh: "#auto-refresh",
   lastUpdated: "#last-updated",
   boardStatus: "#board-status",
   recordings: "#recordings",
@@ -41,7 +39,7 @@ const selectors = {
   modalSubmit: "#modal-submit"
 };
 
-const normalPollMs = 30_000;
+const normalPollMs = 20_000;
 const activePollMs = 5_000;
 const state = {
   data: null,
@@ -62,7 +60,6 @@ const state = {
 async function refresh() {
   if (state.isRefreshing) return;
   state.isRefreshing = true;
-  setLoading(true);
 
   try {
     const response = await fetch("/api/dashboard/today");
@@ -83,7 +80,6 @@ async function refresh() {
     console.error(error);
   } finally {
     state.isRefreshing = false;
-    setLoading(false);
     scheduleAutoRefresh();
   }
 }
@@ -198,6 +194,9 @@ function createTaskCard(task) {
     meta: meta,
     avatar: config.avatar,
     points: priorityText(task.priority),
+    priority: task.priority,
+    dueDate: task.due_date,
+    project: task.project,
     status: "",
     actions: [
       { label: "✎ 编辑", variant: "ghost", taskId: task.id, onClick: () => openModal(task) },
@@ -277,6 +276,32 @@ function renderCard(card) {
   title.className = "card-title";
   title.textContent = card.title;
 
+  // Priority and deadline info row
+  const infoRow = document.createElement("div");
+  infoRow.className = "card-info-row";
+
+  if (card.priority) {
+    const priorityBadge = document.createElement("span");
+    priorityBadge.className = `priority-badge priority-${card.priority}`;
+    const priorityLabels = { high: "高", medium: "中", low: "低" };
+    priorityBadge.textContent = priorityLabels[card.priority] || "中";
+    infoRow.append(priorityBadge);
+  }
+
+  if (card.dueDate) {
+    const dueDateBadge = document.createElement("span");
+    dueDateBadge.className = "due-date-badge";
+    dueDateBadge.textContent = `截止 ${card.dueDate}`;
+    infoRow.append(dueDateBadge);
+  }
+
+  if (card.project) {
+    const projectBadge = document.createElement("span");
+    projectBadge.className = "project-badge";
+    projectBadge.textContent = card.project;
+    infoRow.append(projectBadge);
+  }
+
   const body = document.createElement("p");
   body.className = "card-body";
   body.textContent = card.body;
@@ -291,16 +316,17 @@ function renderCard(card) {
   avatar.className = "avatar";
   avatar.textContent = card.avatar;
 
-  const points = document.createElement("span");
-  points.className = "points";
-  points.textContent = card.points;
-
   const id = document.createElement("span");
+  id.className = "card-id";
   id.textContent = card.meta;
 
-  left.append(avatar, points);
-  meta.append(left, id);
+  left.append(avatar, id);
+  meta.append(left);
   article.append(tag, title);
+
+  if (infoRow.childNodes.length > 0) {
+    article.append(infoRow);
+  }
 
   if (card.body) {
     article.append(body);
@@ -418,7 +444,6 @@ function renderEmptyState(message) {
   renderInsights(selectors.questions, [], "暂无待解决问题。", "question");
   renderNotifications([]);
   document.querySelector(selectors.projectBoard).replaceChildren(renderEmptyCard("暂无项目任务。"));
-  document.querySelector(selectors.completionBar).style.width = "0%";
 }
 
 async function uploadRecording(file, name = "browser-recording.webm") {
@@ -478,12 +503,6 @@ function setTaskButtonsDisabled(taskId, disabled) {
   });
 }
 
-function setLoading(isLoading) {
-  const refreshButton = document.querySelector(selectors.refresh);
-  refreshButton.disabled = isLoading;
-  refreshButton.textContent = isLoading ? "刷新中" : "刷新";
-}
-
 async function toggleRecording() {
   if (state.isRecording) {
     stopRecording();
@@ -493,6 +512,30 @@ async function toggleRecording() {
 }
 
 async function startRecording() {
+  if (window.__TAURI__) {
+    await startRecordingNative();
+  } else {
+    await startRecordingBrowser();
+  }
+}
+
+async function startRecordingNative() {
+  try {
+    const filePath = await window.__TAURI__.core.invoke("start_recording");
+    state.isRecording = true;
+    state.recordingFilePath = filePath;
+    state.recordingStartedAt = Date.now();
+    sendTauriNotification("录音已开始", "正在录音中...");
+    setUploadState(false);
+    updateRecordingTimer();
+    state.recordingTimer = window.setInterval(updateRecordingTimer, 1000);
+  } catch (error) {
+    setUploadStatus(error.message || "无法启动录音。", true);
+    console.error(error);
+  }
+}
+
+async function startRecordingBrowser() {
   if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
     setUploadStatus("当前浏览器不支持网页录音，请使用新版 Chrome 或 Safari。", true);
     return;
@@ -526,6 +569,36 @@ async function startRecording() {
 }
 
 function stopRecording() {
+  if (window.__TAURI__) {
+    stopRecordingNative();
+  } else {
+    stopRecordingBrowser();
+  }
+}
+
+async function stopRecordingNative() {
+  window.clearInterval(state.recordingTimer);
+  state.recordingTimer = null;
+  state.isRecording = false;
+  setUploadState(false, "录音已停止，正在上传解析...");
+
+  try {
+    const filePath = await window.__TAURI__.core.invoke("stop_recording");
+    sendTauriNotification("录音已结束", "正在解析中...");
+    const result = await window.__TAURI__.core.invoke("upload_recording", { filePath });
+    const taskCount = result.taskCount ?? 0;
+    sendTauriNotification("解析完成", `识别出 ${taskCount} 条待确认事项`);
+    setUploadStatus(`处理完成：录音 #${result.recordingId ?? "?"}`);
+    await refresh();
+  } catch (error) {
+    setUploadStatus(error.message || "上传失败，请重试。", true);
+    console.error(error);
+  } finally {
+    setUploadState(false);
+  }
+}
+
+function stopRecordingBrowser() {
   if (state.recorder && state.recorder.state !== "inactive") {
     setUploadStatus("录音已停止，正在准备上传。");
     state.recorder.stop();
@@ -587,7 +660,6 @@ function setUploadStatus(message, isError = false) {
 
 function scheduleAutoRefresh() {
   window.clearTimeout(state.pollTimer);
-  if (!isAutoRefreshEnabled()) return;
   state.pollTimer = window.setTimeout(refresh, pollIntervalMs(state.data));
 }
 
@@ -601,13 +673,11 @@ function hasProcessing(data) {
 }
 
 function statusTextForPolling(data) {
-  if (!isAutoRefreshEnabled()) return "看板数据已同步，自动刷新已关闭";
-  const seconds = pollIntervalMs(data) / 1000;
-  return hasProcessing(data) || state.isUploading ? `处理中，${seconds} 秒后自动刷新` : `看板数据已同步，${seconds} 秒后自动刷新`;
-}
-
-function isAutoRefreshEnabled() {
-  return document.querySelector(selectors.autoRefresh).checked;
+  if (hasProcessing(data) || state.isUploading) {
+    const seconds = pollIntervalMs(data) / 1000;
+    return `处理中，${seconds} 秒后自动刷新`;
+  }
+  return "";
 }
 
 function setText(selector, value) {
@@ -706,16 +776,9 @@ function priorityText(priority) {
 
 function taskMetaText(task) {
   const parts = [];
-  if (task.project) parts.push(task.project);
   if (task.recording_id && task.recording_id !== "manual") {
-    // Note: in practice recording_id might be an integer, 
-    // so we check if it's not a manual flag if the API returns one, 
-    // but getTodayDashboard returns the raw recording_id from DB.
-    // For manual tasks, recording_id points to a recording with source_type='manual'.
-    // Here we just check if it's a number and not null.
     parts.push(`录音 #${task.recording_id}`);
   }
-  if (task.due_date) parts.push(`截止 ${task.due_date}`);
   parts.push(`任务 #${task.id}`);
   return parts.join(" · ");
 }
@@ -858,18 +921,8 @@ function closeModal() {
   hideNewProjectForm();
 }
 
-document.querySelector(selectors.refresh).addEventListener("click", () => {
-  window.clearTimeout(state.pollTimer);
-  refresh();
-});
 document.querySelector(selectors.uploadButton).addEventListener("click", () => {
   toggleRecording();
-});
-document.querySelector(selectors.autoRefresh).addEventListener("change", () => {
-  scheduleAutoRefresh();
-  document.querySelector(selectors.boardStatus).textContent = document.querySelector(selectors.autoRefresh).checked
-    ? statusTextForPolling(state.data)
-    : "自动刷新已关闭";
 });
 document.querySelector(selectors.addTaskButton).addEventListener("click", () => openModal());
 document.querySelector(selectors.newProject).addEventListener("click", showNewProjectForm);
@@ -899,5 +952,29 @@ document.querySelector(selectors.chipRow).addEventListener("click", (e) => {
   const chip = e.target.closest(".chip");
   if (chip?.dataset.filter) applyFilter(chip.dataset.filter);
 });
+
+function setupTauriListeners() {
+  if (!window.__TAURI__) return;
+  window.__TAURI__.event.listen("toggle-recording", () => {
+    toggleRecording();
+  });
+  window.__TAURI__.event.listen("open-dashboard", () => {
+    window.focus();
+  });
+  // Register saved shortcut from localStorage
+  const savedShortcut = localStorage.getItem("recording-shortcut");
+  if (savedShortcut) {
+    window.__TAURI__.core.invoke("set_shortcut", { shortcut: savedShortcut }).catch(() => {});
+  }
+}
+
+async function sendTauriNotification(title, body) {
+  if (!window.__TAURI__) return;
+  try {
+    await window.__TAURI__.core.invoke("send_notification", { title, body });
+  } catch {
+    // notifications are best-effort
+  }
+}
 
 refresh();

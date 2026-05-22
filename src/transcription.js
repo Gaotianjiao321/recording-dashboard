@@ -114,8 +114,8 @@ async function transcribeFromSidecar(chunk) {
   return text.trim();
 }
 
-function fallbackTranscript(chunk) {
-  return `Transcript chunk ${chunk.position + 1}: TODO: review ${chunk.filePath}. Decision: keep local-first MVP.`;
+function fallbackTranscript(_chunk) {
+  return "";
 }
 
 export function createTranscriber(options = {}) {

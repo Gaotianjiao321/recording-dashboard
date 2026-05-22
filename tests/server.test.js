@@ -43,7 +43,7 @@ test("HTTP API processes a recording and exposes dashboard state", async () => {
     assert.equal(dashboard.stats.recordings, 1);
     assert.equal(dashboard.tasks[0].status, "pending_confirm");
     assert.equal(dashboard.tasks[0].body, "");
-    assert.equal(dashboard.projects[0].name, "录音解析");
+    assert.equal(dashboard.projects[0].name, "未归属");
 
     const confirmResponse = await fetch(`${baseUrl}/api/tasks/${dashboard.tasks[0].id}/confirm`, {
       method: "POST"
