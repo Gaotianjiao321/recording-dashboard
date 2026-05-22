@@ -24,9 +24,9 @@ static RECORDING_STATE: once_cell::sync::Lazy<Mutex<RecordingState>> =
     });
 
 fn recordings_dir() -> PathBuf {
-    let dir = std::env::current_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join("recordings");
+    // Use ~/Library/Application Support/<bundle-id>/recordings for production safety
+    let home = std::env::var("HOME").map(PathBuf::from).unwrap_or_else(|_| PathBuf::from("."));
+    let dir = home.join("Library/Application Support/com.recording-dashboard.app/recordings");
     fs::create_dir_all(&dir).ok();
     dir
 }

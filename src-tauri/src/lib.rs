@@ -73,9 +73,20 @@ fn is_port_in_use(port: u16) -> bool {
 }
 
 fn spawn_sidecar(app_root: &std::path::Path) -> Option<Child> {
+    // In production (DMG), app_root is the Resources dir inside .app bundle.
+    // In dev, it's the project root. Check for src/index.js to confirm.
+    let src_index = app_root.join("src").join("index.js");
+    let (cwd, script_path) = if src_index.exists() {
+        (app_root.to_path_buf(), "src/index.js".to_string())
+    } else {
+        // Fallback: try current dir (dev mode launched from project root)
+        let cwd = std::env::current_dir().unwrap_or_else(|_| app_root.to_path_buf());
+        (cwd, "src/index.js".to_string())
+    };
+
     Command::new("node")
-        .arg("src/index.js")
-        .current_dir(app_root)
+        .arg(&script_path)
+        .current_dir(&cwd)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -95,7 +106,10 @@ fn wait_for_health(port: u16, max_attempts: u32) -> bool {
 
 fn start_sidecar_manager(app: &tauri::App) {
     let handle = app.handle().clone();
-    let app_root = std::env::current_dir().unwrap();
+    // Use Tauri path resolver: in production this returns <app>.app/Contents/Resources/
+    // In dev it returns the project root.
+    let app_root = handle.path().resource_dir()
+        .unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
 
     if is_port_in_use(SIDECAR_PORT) {
         return;
@@ -151,10 +165,14 @@ fn start_sidecar_manager(app: &tauri::App) {
 }
 
 #[tauri::command]
-fn restart_sidecar() -> bool {
-    let app_root = std::env::current_dir().unwrap();
-    if let Some(mut child) = spawn_sidecar(&app_root) {
-        let _ = child.kill();
+fn restart_sidecar(app: tauri::AppHandle) -> bool {
+    let app_root = app.path().resource_dir()
+        .unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    // Just spawn a new sidecar — if the old one is dead, the new one takes the port.
+    // The sidecar manager thread handles crash detection and restarts.
+    if let Some(_child) = spawn_sidecar(&app_root) {
+        // Give it a moment to start
+        std::thread::sleep(std::time::Duration::from_secs(2));
     }
     is_port_in_use(SIDECAR_PORT)
 }
@@ -181,11 +199,11 @@ fn set_shortcut(app: tauri::AppHandle, shortcut: String) -> Result<(), String> {
 
 #[tauri::command]
 fn get_recording_path() -> String {
-    std::env::current_dir()
-        .unwrap_or_default()
-        .join("recordings")
-        .to_string_lossy()
-        .into_owned()
+    let home = std::env::var("HOME").map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let dir = home.join("Library/Application Support/com.recording-dashboard.app/recordings");
+    std::fs::create_dir_all(&dir).ok();
+    dir.to_string_lossy().into_owned()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
