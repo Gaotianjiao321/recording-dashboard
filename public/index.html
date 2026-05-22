@@ -25,19 +25,24 @@
 
         <section class="kpi-grid" aria-label="今日关键指标">
           <article class="kpi-card">
-            <span class="kpi-label">🎙 录音总数</span>
+            <span class="kpi-label">🎙 今日录音</span>
             <strong id="recordings">0</strong>
             <small>今日已进入系统的录音</small>
           </article>
           <article class="kpi-card">
-            <span class="kpi-label">⚡ 进行中</span>
+            <span class="kpi-label">⏳ 待确认</span>
+            <strong id="pending">0</strong>
+            <small>AI 识别待确认的任务</small>
+          </article>
+          <article class="kpi-card">
+            <span class="kpi-label">⚡ 今日待办</span>
             <strong id="processing">0</strong>
             <small>正在推进的个人任务</small>
           </article>
           <article class="kpi-card">
-            <span class="kpi-label">📋 待办任务数</span>
-            <strong id="pending">0</strong>
-            <small>待办、进行中和已完成任务</small>
+            <span class="kpi-label">✅ 已完成</span>
+            <strong id="done-stats">0</strong>
+            <small>今日已完成或归档的任务</small>
           </article>
         </section>
 
@@ -59,7 +64,7 @@
         <section class="board" aria-label="今日看板">
           <div class="column">
             <div class="column-head">
-              <div class="column-name"><span class="swatch gray"></span>⏳ 待办</div>
+              <div class="column-name"><span class="swatch gray"></span>⏳ 待确认</div>
               <span id="pending-count" class="column-count">0</span>
             </div>
             <div id="pending-column" class="card-stack"></div>
@@ -67,7 +72,7 @@
 
           <div class="column">
             <div class="column-head">
-              <div class="column-name"><span class="swatch violet"></span>🔄 进行中</div>
+              <div class="column-name"><span class="swatch violet"></span>🔄 今日待办</div>
               <span id="processing-count" class="column-count">0</span>
             </div>
             <div id="processing-column" class="card-stack"></div>
