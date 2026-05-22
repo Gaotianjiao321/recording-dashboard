@@ -34,19 +34,6 @@
     "active": true,
     "targets": "all",
     "category": "Productivity",
-    "macOSInfoPlist": {
-      "NSMicrophoneUsageDescription": "录音功能需要访问麦克风来录制工作对话。"
-    },
-    "resources": [
-      "src/**",
-      "public/**",
-      "data/**",
-      "recordings/**",
-      "scripts/**",
-      "node_modules/**",
-      ".env",
-      "package.json",
-      "package-lock.json"
-    ]
+    "resources": []
   }
 }
