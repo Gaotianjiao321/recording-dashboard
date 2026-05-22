@@ -50,7 +50,7 @@ test("processes recording through save, chunk, transcribe, parse, dashboard, and
   assert.equal(dashboard.tasks[0].title, "send plan");
   assert.equal(dashboard.tasks[0].body, "");
   assert.equal(dashboard.tasks[0].status, "pending_confirm");
-  assert.equal(dashboard.projects[0].name, "录音解析");
+  assert.equal(dashboard.projects[0].name, "未归属");
   assert.equal(notifications.length, 1);
   assert.equal(notifications[0].body.includes("send plan"), true);
 });
