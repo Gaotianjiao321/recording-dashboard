@@ -230,9 +230,17 @@ pub fn run() {
             get_recording_path
         ])
         .setup(|app| {
-            // Register default global shortcut
+            // Register default global shortcut (graceful failure)
             let shortcut = Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::KeyR);
-            app.global_shortcut().register(shortcut)?;
+            if let Err(e) = app.global_shortcut().register(shortcut) {
+                eprintln!("Failed to register shortcut Cmd+Shift+R: {}", e);
+                let handle = app.handle().clone();
+                send_notification(
+                    handle,
+                    "快捷键注册失败".into(),
+                    format!("Cmd+Shift+R 被其他应用占用，请在设置中更换快捷键。({})", e),
+                );
+            }
 
             // System tray
             let toggle_item = MenuItem::with_id(app, "toggle", "开始录音 ⌘⇧R", true, None::<&str>)?;

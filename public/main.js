@@ -580,20 +580,19 @@ async function stopRecordingNative() {
   window.clearInterval(state.recordingTimer);
   state.recordingTimer = null;
   state.isRecording = false;
-  setUploadState(false, "录音已停止，正在上传解析...");
+  setUploadState(true, "录音已停止，正在上传...");
 
   try {
     const filePath = await window.__TAURI__.core.invoke("stop_recording");
     sendTauriNotification("录音已结束", "正在解析中...");
-    const result = await window.__TAURI__.core.invoke("upload_recording", { filePath });
-    const taskCount = result.taskCount ?? 0;
-    sendTauriNotification("解析完成", `识别出 ${taskCount} 条待确认事项`);
-    setUploadStatus(`处理完成：录音 #${result.recordingId ?? "?"}`);
+    await window.__TAURI__.core.invoke("upload_recording", { filePath });
+    setUploadStatus("录音已上传，后台解析中，看板将自动刷新...");
     await refresh();
   } catch (error) {
     setUploadStatus(error.message || "上传失败，请重试。", true);
     console.error(error);
   } finally {
+    state.isUploading = false;
     setUploadState(false);
   }
 }

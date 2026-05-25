@@ -232,7 +232,11 @@ pub async fn upload_recording(file_path: String) -> Result<serde_json::Value, St
     body.extend_from_slice(&file_bytes);
     body.extend_from_slice(format!("\r\n--{}--\r\n", boundary).as_bytes());
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
     let response = client
         .post(format!("http://127.0.0.1:{}/api/recordings/process", SIDECAR_PORT))
         .header(

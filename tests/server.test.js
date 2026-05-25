@@ -37,7 +37,12 @@ test("HTTP API processes a recording and exposes dashboard state", async () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ path: "recordings/api.wav" })
     });
-    assert.equal(processResponse.status, 201);
+    assert.equal(processResponse.status, 202);
+    const processBody = await processResponse.json();
+    assert.equal(processBody.status, "processing");
+
+    // Pipeline runs in background; wait for mock services to finish
+    await new Promise((resolve) => setTimeout(resolve, 200));
 
     const dashboard = await (await fetch(`${baseUrl}/api/dashboard/today`)).json();
     assert.equal(dashboard.stats.recordings, 1);
@@ -65,7 +70,10 @@ test("HTTP API processes a recording and exposes dashboard state", async () => {
       method: "POST",
       body: upload
     });
-    assert.equal(uploadResponse.status, 201);
+    assert.equal(uploadResponse.status, 202);
+
+    // Wait for background pipeline
+    await new Promise((resolve) => setTimeout(resolve, 200));
 
     const updatedDashboard = await (await fetch(`${baseUrl}/api/dashboard/today`)).json();
     assert.equal(updatedDashboard.stats.recordings, 2);
