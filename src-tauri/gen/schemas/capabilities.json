@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Default permissions for the recording dashboard window","local":true,"windows":["main"],"permissions":["core:default","notification:default","global-shortcut:allow-is-registered","global-shortcut:allow-register","global-shortcut:allow-unregister","global-shortcut:allow-unregister-all"]}}

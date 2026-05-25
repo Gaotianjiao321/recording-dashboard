@@ -114,7 +114,7 @@ export async function processRecording(db, recordingPath, services = {}) {
     await notifyAndRecord(
       db,
       recordingId,
-      { title: "Recording parsed", body: notificationBody(parsed) },
+      { title: "解析完成", body: `识别出 ${todos.length} 条待确认事项。${notificationBody(parsed)}` },
       notifier
     );
 

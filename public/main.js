@@ -198,6 +198,9 @@ function createTaskCard(task) {
     meta: meta,
     avatar: config.avatar,
     points: priorityText(task.priority),
+    priority: task.priority,
+    dueDate: task.due_date,
+    project: task.project,
     status: "",
     actions: [
       { label: "✎ 编辑", variant: "ghost", taskId: task.id, onClick: () => openModal(task) },
@@ -277,6 +280,31 @@ function renderCard(card) {
   title.className = "card-title";
   title.textContent = card.title;
 
+  const infoRow = document.createElement("div");
+  infoRow.className = "card-info-row";
+
+  if (card.priority) {
+    const priorityBadge = document.createElement("span");
+    priorityBadge.className = `priority-badge priority-${card.priority}`;
+    const priorityLabels = { high: "高", medium: "中", low: "低" };
+    priorityBadge.textContent = priorityLabels[card.priority] || "中";
+    infoRow.append(priorityBadge);
+  }
+
+  if (card.dueDate) {
+    const dueDateBadge = document.createElement("span");
+    dueDateBadge.className = "due-date-badge";
+    dueDateBadge.textContent = `截止 ${card.dueDate}`;
+    infoRow.append(dueDateBadge);
+  }
+
+  if (card.project) {
+    const projectBadge = document.createElement("span");
+    projectBadge.className = "project-badge";
+    projectBadge.textContent = card.project;
+    infoRow.append(projectBadge);
+  }
+
   const body = document.createElement("p");
   body.className = "card-body";
   body.textContent = card.body;
@@ -301,6 +329,10 @@ function renderCard(card) {
   left.append(avatar, points);
   meta.append(left, id);
   article.append(tag, title);
+
+  if (infoRow.childNodes.length > 0) {
+    article.append(infoRow);
+  }
 
   if (card.body) {
     article.append(body);
@@ -493,6 +525,30 @@ async function toggleRecording() {
 }
 
 async function startRecording() {
+  if (window.__TAURI__) {
+    await startRecordingNative();
+    return;
+  }
+  await startRecordingBrowser();
+}
+
+async function startRecordingNative() {
+  try {
+    const filePath = await window.__TAURI__.core.invoke("start_recording");
+    state.isRecording = true;
+    state.recordingFilePath = filePath;
+    state.recordingStartedAt = Date.now();
+    sendTauriNotification("录音已开始", "正在录音中...");
+    setUploadState(false);
+    updateRecordingTimer();
+    state.recordingTimer = window.setInterval(updateRecordingTimer, 1000);
+  } catch (error) {
+    setUploadStatus(error.message || "无法启动录音。", true);
+    console.error(error);
+  }
+}
+
+async function startRecordingBrowser() {
   if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
     setUploadStatus("当前浏览器不支持网页录音，请使用新版 Chrome 或 Safari。", true);
     return;
@@ -526,6 +582,35 @@ async function startRecording() {
 }
 
 function stopRecording() {
+  if (window.__TAURI__) {
+    stopRecordingNative();
+  } else {
+    stopRecordingBrowser();
+  }
+}
+
+async function stopRecordingNative() {
+  window.clearInterval(state.recordingTimer);
+  state.recordingTimer = null;
+  state.isRecording = false;
+  setUploadState(true, "录音已停止，正在上传...");
+
+  try {
+    const filePath = await window.__TAURI__.core.invoke("stop_recording");
+    sendTauriNotification("录音已结束", "正在解析中...");
+    await window.__TAURI__.core.invoke("upload_recording", { filePath });
+    setUploadStatus("录音已上传，后台解析中，看板将自动刷新...");
+    await refresh();
+  } catch (error) {
+    setUploadStatus(error.message || "上传失败，请重试。", true);
+    console.error(error);
+  } finally {
+    state.isUploading = false;
+    setUploadState(false);
+  }
+}
+
+function stopRecordingBrowser() {
   if (state.recorder && state.recorder.state !== "inactive") {
     setUploadStatus("录音已停止，正在准备上传。");
     state.recorder.stop();
@@ -900,4 +985,28 @@ document.querySelector(selectors.chipRow).addEventListener("click", (e) => {
   if (chip?.dataset.filter) applyFilter(chip.dataset.filter);
 });
 
+function setupTauriListeners() {
+  if (!window.__TAURI__) return;
+  window.__TAURI__.event.listen("toggle-recording", () => {
+    toggleRecording();
+  });
+  window.__TAURI__.event.listen("open-dashboard", () => {
+    window.focus();
+  });
+  const savedShortcut = localStorage.getItem("recording-shortcut");
+  if (savedShortcut) {
+    window.__TAURI__.core.invoke("set_shortcut", { shortcut: savedShortcut }).catch(() => {});
+  }
+}
+
+async function sendTauriNotification(title, body) {
+  if (!window.__TAURI__) return;
+  try {
+    await window.__TAURI__.core.invoke("send_notification", { title, body });
+  } catch {
+    // notifications are best-effort
+  }
+}
+
+setupTauriListeners();
 refresh();
