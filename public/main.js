@@ -1,10 +1,7 @@
 const selectors = {
-  refresh: "#refresh",
   uploadButton: "#upload-recording",
   addTaskButton: "#add-task",
   uploadStatus: "#upload-status",
-  autoRefresh: "#auto-refresh",
-  lastUpdated: "#last-updated",
   boardStatus: "#board-status",
   recordings: "#recordings",
   processing: "#processing",
@@ -75,8 +72,7 @@ async function refresh() {
     state.projects = normalizeProjects(data.projects);
     renderProjectOptions();
     renderDashboard(data);
-    document.querySelector(selectors.boardStatus).textContent = statusTextForPolling(data);
-    document.querySelector(selectors.lastUpdated).textContent = `最近刷新 ${formatTime(new Date())}`;
+    document.querySelector(selectors.boardStatus).textContent = `最近刷新 ${formatTime(new Date())}`;
   } catch (error) {
     document.querySelector(selectors.boardStatus).textContent = "看板数据加载失败";
     renderEmptyState("加载失败，请稍后重试。");
@@ -511,9 +507,7 @@ function setTaskButtonsDisabled(taskId, disabled) {
 }
 
 function setLoading(isLoading) {
-  const refreshButton = document.querySelector(selectors.refresh);
-  refreshButton.disabled = isLoading;
-  refreshButton.textContent = isLoading ? "刷新中" : "刷新";
+  document.body.classList.toggle("is-refreshing", isLoading);
 }
 
 async function toggleRecording() {
@@ -672,7 +666,6 @@ function setUploadStatus(message, isError = false) {
 
 function scheduleAutoRefresh() {
   window.clearTimeout(state.pollTimer);
-  if (!isAutoRefreshEnabled()) return;
   state.pollTimer = window.setTimeout(refresh, pollIntervalMs(state.data));
 }
 
@@ -683,16 +676,6 @@ function pollIntervalMs(data) {
 function hasProcessing(data) {
   const recordings = Array.isArray(data?.recordings) ? data.recordings : [];
   return recordings.some((recording) => recording.status === "processing") || Number(data?.stats?.processing) > 0;
-}
-
-function statusTextForPolling(data) {
-  if (!isAutoRefreshEnabled()) return "看板数据已同步，自动刷新已关闭";
-  const seconds = pollIntervalMs(data) / 1000;
-  return hasProcessing(data) || state.isUploading ? `处理中，${seconds} 秒后自动刷新` : `看板数据已同步，${seconds} 秒后自动刷新`;
-}
-
-function isAutoRefreshEnabled() {
-  return document.querySelector(selectors.autoRefresh).checked;
 }
 
 function setText(selector, value) {
@@ -943,18 +926,8 @@ function closeModal() {
   hideNewProjectForm();
 }
 
-document.querySelector(selectors.refresh).addEventListener("click", () => {
-  window.clearTimeout(state.pollTimer);
-  refresh();
-});
 document.querySelector(selectors.uploadButton).addEventListener("click", () => {
   toggleRecording();
-});
-document.querySelector(selectors.autoRefresh).addEventListener("change", () => {
-  scheduleAutoRefresh();
-  document.querySelector(selectors.boardStatus).textContent = document.querySelector(selectors.autoRefresh).checked
-    ? statusTextForPolling(state.data)
-    : "自动刷新已关闭";
 });
 document.querySelector(selectors.addTaskButton).addEventListener("click", () => openModal());
 document.querySelector(selectors.newProject).addEventListener("click", showNewProjectForm);
