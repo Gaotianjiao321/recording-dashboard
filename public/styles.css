@@ -386,6 +386,53 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.card-info-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.priority-badge,
+.due-date-badge,
+.project-badge {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 5px 8px;
+}
+
+.priority-high {
+  background: rgba(198, 67, 67, 0.1);
+  border-color: rgba(198, 67, 67, 0.22);
+  color: #a33a3a;
+}
+
+.priority-medium {
+  background: rgba(174, 119, 36, 0.1);
+  border-color: rgba(174, 119, 36, 0.24);
+  color: #8b641d;
+}
+
+.priority-low {
+  background: rgba(44, 138, 79, 0.1);
+  border-color: rgba(44, 138, 79, 0.24);
+  color: var(--green);
+}
+
+.due-date-badge {
+  background: var(--soft);
+}
+
+.project-badge {
+  background: rgba(26, 142, 142, 0.1);
+  border-color: rgba(26, 142, 142, 0.22);
+  color: var(--teal);
+}
+
 .card-body {
   color: var(--ink);
   font-size: 13px;
@@ -854,5 +901,4 @@ h1 {
   justify-content: flex-end;
   padding: 12px 20px 16px;
 }
-
 

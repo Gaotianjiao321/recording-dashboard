@@ -193,8 +193,11 @@ export async function createApp(options = {}) {
           ? await saveUploadedRecording(request, contentType, uploadDir)
           : (await readJson(request)).path;
         if (!recordingPath) return sendJson(response, 400, { error: "path is required" });
-        const result = await processRecording(db, recordingPath, options.services);
-        return sendJson(response, 201, result);
+        // Fire-and-forget: run pipeline in background, return immediately
+        processRecording(db, recordingPath, options.services).catch((err) => {
+          console.error("[pipeline] background processing failed:", err.message);
+        });
+        return sendJson(response, 202, { status: "processing", message: "Recording accepted, processing in background." });
       }
 
       if (request.method === "GET" && url.pathname === "/api/dashboard/today") {
