@@ -16,10 +16,8 @@
             <h1>工作录音看板</h1>
           </div>
           <div class="topbar-actions">
-            <span id="last-updated" class="sync-chip">等待刷新</span>
             <button id="upload-recording" class="icon-btn secondary" type="button">开始录音</button>
             <button id="add-task" class="icon-btn secondary" type="button">手动记录</button>
-            <button id="refresh" class="icon-btn" type="button" aria-label="刷新看板">刷新</button>
           </div>
         </header>
 
@@ -53,10 +51,6 @@
             <button class="chip" data-filter="projects" type="button">🗂 项目</button>
           </div>
           <div class="filter-spacer"></div>
-          <label class="auto-refresh">
-            <input id="auto-refresh" type="checkbox" checked />
-            <span>自动刷新</span>
-          </label>
           <span id="board-status" class="board-status">正在加载看板数据</span>
         </section>
         <p id="upload-status" class="upload-status" role="status">点击开始录音，停止后自动上传并解析。</p>
