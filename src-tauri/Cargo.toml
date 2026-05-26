@@ -1,6 +1,6 @@
 [package]
 name = "recording-dashboard"
-version = "0.1.0"
+version = "0.1.2"
 description = "Mac menu bar recording dashboard"
 authors = ["Recording Dashboard"]
 edition = "2021"

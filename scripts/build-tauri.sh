@@ -7,7 +7,11 @@ TAURI_DIR="$PROJECT_ROOT/src-tauri"
 APP_DIR="$TAURI_DIR/target/release/bundle/macos/Recording Dashboard.app"
 RESOURCES_DIR="$APP_DIR/Contents/Resources"
 
-echo "Building Tauri app..."
+VERSION=$(grep -o '"version": *"[^"]*"' "$TAURI_DIR/tauri.conf.json" | head -1 | sed 's/.*"version": *"\([^"]*\)"/\1/')
+DMG_NAME="Recording Dashboard_${VERSION}_aarch64.dmg"
+DMG_PATH="$TAURI_DIR/target/release/bundle/dmg/$DMG_NAME"
+
+echo "Building Tauri app (v${VERSION})..."
 cd "$TAURI_DIR"
 cargo tauri build
 
@@ -23,12 +27,12 @@ mkdir -p "$RESOURCES_DIR/data"
 mkdir -p "$RESOURCES_DIR/recordings"
 
 echo "Rebuilding DMG..."
-rm -f "$TAURI_DIR/target/release/bundle/dmg/Recording Dashboard_0.1.0_aarch64.dmg"
+rm -f "$TAURI_DIR/target/release/bundle/dmg/"Recording\ Dashboard_*.dmg
 hdiutil create -volname "Recording Dashboard" \
   -srcfolder "$APP_DIR" \
   -ov -format UDZO \
-  "$TAURI_DIR/target/release/bundle/dmg/Recording Dashboard_0.1.0_aarch64.dmg"
+  "$DMG_PATH"
 
 echo "Done!"
 echo "  .app: $APP_DIR"
-echo "  DMG:  $TAURI_DIR/target/release/bundle/dmg/Recording Dashboard_0.1.0_aarch64.dmg"
+echo "  DMG:  $DMG_PATH"

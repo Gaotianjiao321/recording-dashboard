@@ -1,8 +1,7 @@
 const SIDECAR_PORT = 5174;
 
 function apiUrl(path) {
-  if (window.__TAURI__) return `http://localhost:${SIDECAR_PORT}${path}`;
-  return path;
+  return `http://localhost:${SIDECAR_PORT}${path}`;
 }
 
 const selectors = {
