@@ -117,14 +117,29 @@ fn spawn_sidecar(app_root: &std::path::Path) -> Option<Child> {
 
     let node_path = find_node();
 
-    Command::new(&node_path)
-        .arg(&script_path)
+    let log_path = cwd.join("sidecar.log");
+    let stdout_log = std::fs::OpenOptions::new()
+        .create(true).append(true).open(&log_path);
+    let stderr_log = std::fs::OpenOptions::new()
+        .create(true).append(true).open(&log_path);
+
+    eprintln!("[sidecar] spawning {} {} in {}", node_path, script_path, cwd.display());
+
+    let mut cmd = Command::new(&node_path);
+    cmd.arg(&script_path)
         .current_dir(&cwd)
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .ok()
+        .stdin(std::process::Stdio::piped());
+    match (stdout_log, stderr_log) {
+        (Ok(out), Ok(err)) => {
+            cmd.stdout(std::process::Stdio::from(out))
+               .stderr(std::process::Stdio::from(err));
+        }
+        _ => {
+            cmd.stdout(std::process::Stdio::null())
+               .stderr(std::process::Stdio::null());
+        }
+    }
+    cmd.spawn().ok()
 }
 
 fn wait_for_health(port: u16, max_attempts: u32) -> bool {
