@@ -1,9 +1,14 @@
+const SIDECAR_PORT = 5174;
+
+function apiUrl(path) {
+  if (window.__TAURI__) return `http://localhost:${SIDECAR_PORT}${path}`;
+  return path;
+}
+
 const selectors = {
-  refresh: "#refresh",
   uploadButton: "#upload-recording",
   addTaskButton: "#add-task",
   uploadStatus: "#upload-status",
-  autoRefresh: "#auto-refresh",
   lastUpdated: "#last-updated",
   boardStatus: "#board-status",
   recordings: "#recordings",
@@ -65,7 +70,7 @@ async function refresh() {
   setLoading(true);
 
   try {
-    const response = await fetch("/api/dashboard/today");
+    const response = await fetch(apiUrl("/api/dashboard/today"));
     if (!response.ok) {
       throw new Error(`看板数据请求失败：${response.status}`);
     }
@@ -75,7 +80,6 @@ async function refresh() {
     state.projects = normalizeProjects(data.projects);
     renderProjectOptions();
     renderDashboard(data);
-    document.querySelector(selectors.boardStatus).textContent = statusTextForPolling(data);
     document.querySelector(selectors.lastUpdated).textContent = `最近刷新 ${formatTime(new Date())}`;
   } catch (error) {
     document.querySelector(selectors.boardStatus).textContent = "看板数据加载失败";
@@ -461,7 +465,7 @@ async function uploadRecording(file, name = "browser-recording.webm") {
   scheduleAutoRefresh();
 
   try {
-    const response = await fetch("/api/recordings/process", {
+    const response = await fetch(apiUrl("/api/recordings/process"), {
       method: "POST",
       body: formData
     });
@@ -486,7 +490,7 @@ async function updateTaskStatus(taskId, status) {
   document.querySelector(selectors.boardStatus).textContent = taskStatusMessage(status);
 
   try {
-    const response = await fetch(`/api/tasks/${taskId}/status`, {
+    const response = await fetch(apiUrl(`/api/tasks/${taskId}/status`), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ status })
@@ -511,9 +515,7 @@ function setTaskButtonsDisabled(taskId, disabled) {
 }
 
 function setLoading(isLoading) {
-  const refreshButton = document.querySelector(selectors.refresh);
-  refreshButton.disabled = isLoading;
-  refreshButton.textContent = isLoading ? "刷新中" : "刷新";
+  document.querySelector(selectors.boardStatus).textContent = isLoading ? "刷新中..." : "";
 }
 
 async function toggleRecording() {
@@ -672,7 +674,6 @@ function setUploadStatus(message, isError = false) {
 
 function scheduleAutoRefresh() {
   window.clearTimeout(state.pollTimer);
-  if (!isAutoRefreshEnabled()) return;
   state.pollTimer = window.setTimeout(refresh, pollIntervalMs(state.data));
 }
 
@@ -683,16 +684,6 @@ function pollIntervalMs(data) {
 function hasProcessing(data) {
   const recordings = Array.isArray(data?.recordings) ? data.recordings : [];
   return recordings.some((recording) => recording.status === "processing") || Number(data?.stats?.processing) > 0;
-}
-
-function statusTextForPolling(data) {
-  if (!isAutoRefreshEnabled()) return "看板数据已同步，自动刷新已关闭";
-  const seconds = pollIntervalMs(data) / 1000;
-  return hasProcessing(data) || state.isUploading ? `处理中，${seconds} 秒后自动刷新` : `看板数据已同步，${seconds} 秒后自动刷新`;
-}
-
-function isAutoRefreshEnabled() {
-  return document.querySelector(selectors.autoRefresh).checked;
 }
 
 function setText(selector, value) {
@@ -729,7 +720,7 @@ function optionElement(value, label) {
 
 async function loadProjects(selected = "") {
   try {
-    const response = await fetch("/api/projects");
+    const response = await fetch(apiUrl("/api/projects"));
     if (!response.ok) throw new Error(`项目列表请求失败：${response.status}`);
     const projects = await response.json();
     state.projects = normalizeProjects(projects);
@@ -761,7 +752,7 @@ async function submitNewProject() {
   btn.disabled = true;
 
   try {
-    const response = await fetch("/api/projects", {
+    const response = await fetch(apiUrl("/api/projects"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ name })
@@ -894,7 +885,7 @@ async function submitManualTask() {
     due_date: document.querySelector(selectors.taskDueDate).value,
     project: document.querySelector(selectors.taskProject).value
   };
-  const url = state.editingTaskId ? `/api/tasks/${state.editingTaskId}` : "/api/tasks";
+  const url = state.editingTaskId ? apiUrl(`/api/tasks/${state.editingTaskId}`) : apiUrl("/api/tasks");
 
   try {
     const response = await fetch(url, {
@@ -943,18 +934,8 @@ function closeModal() {
   hideNewProjectForm();
 }
 
-document.querySelector(selectors.refresh).addEventListener("click", () => {
-  window.clearTimeout(state.pollTimer);
-  refresh();
-});
 document.querySelector(selectors.uploadButton).addEventListener("click", () => {
   toggleRecording();
-});
-document.querySelector(selectors.autoRefresh).addEventListener("change", () => {
-  scheduleAutoRefresh();
-  document.querySelector(selectors.boardStatus).textContent = document.querySelector(selectors.autoRefresh).checked
-    ? statusTextForPolling(state.data)
-    : "自动刷新已关闭";
 });
 document.querySelector(selectors.addTaskButton).addEventListener("click", () => openModal());
 document.querySelector(selectors.newProject).addEventListener("click", showNewProjectForm);
