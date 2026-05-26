@@ -72,6 +72,37 @@ fn is_port_in_use(port: u16) -> bool {
     std::net::TcpStream::connect(format!("127.0.0.1:{}", port)).is_ok()
 }
 
+fn find_node() -> String {
+    // GUI apps on macOS don't inherit shell PATH (nvm, volta, fnm, homebrew).
+    // Check common locations, then fall back to `node` (inherits current PATH).
+    let candidates = [
+        "/usr/local/bin/node",
+        "/opt/homebrew/bin/node",
+    ];
+    for path in &candidates {
+        if std::path::Path::new(path).exists() {
+            return path.to_string();
+        }
+    }
+    // Try resolving via user shell (picks up nvm/volta/fnm)
+    if let Ok(home) = std::env::var("HOME") {
+        let shell_cmd = format!(
+            "source {}/.zshrc 2>/dev/null || source {}/.bash_profile 2>/dev/null; which node",
+            home, home
+        );
+        if let Ok(output) = std::process::Command::new("/bin/zsh")
+            .args(["-c", &shell_cmd])
+            .output()
+        {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !path.is_empty() && std::path::Path::new(&path).exists() {
+                return path;
+            }
+        }
+    }
+    "node".to_string()
+}
+
 fn spawn_sidecar(app_root: &std::path::Path) -> Option<Child> {
     // In production (DMG), app_root is the Resources dir inside .app bundle.
     // In dev, it's the project root. Check for src/index.js to confirm.
@@ -84,7 +115,9 @@ fn spawn_sidecar(app_root: &std::path::Path) -> Option<Child> {
         (cwd, "src/index.js".to_string())
     };
 
-    Command::new("node")
+    let node_path = find_node();
+
+    Command::new(&node_path)
         .arg(&script_path)
         .current_dir(&cwd)
         .stdin(std::process::Stdio::piped())
