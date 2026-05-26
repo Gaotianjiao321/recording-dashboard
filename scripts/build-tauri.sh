@@ -16,9 +16,9 @@ mkdir -p "$RESOURCES_DIR"
 cp -R "$PROJECT_ROOT/src" "$RESOURCES_DIR/"
 cp -R "$PROJECT_ROOT/public" "$RESOURCES_DIR/"
 cp -R "$PROJECT_ROOT/scripts" "$RESOURCES_DIR/"
-cp "$PROJECT_ROOT/.env" "$RESOURCES_DIR/"
+[ -f "$PROJECT_ROOT/.env" ] && cp "$PROJECT_ROOT/.env" "$RESOURCES_DIR/" || true
 cp "$PROJECT_ROOT/package.json" "$RESOURCES_DIR/"
-cp "$PROJECT_ROOT/package-lock.json" "$RESOURCES_DIR/"
+[ -f "$PROJECT_ROOT/package-lock.json" ] && cp "$PROJECT_ROOT/package-lock.json" "$RESOURCES_DIR/" || true
 mkdir -p "$RESOURCES_DIR/data"
 mkdir -p "$RESOURCES_DIR/recordings"
 
