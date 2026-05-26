@@ -1,10 +1,16 @@
 import { execFile } from "node:child_process";
 import { mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const sqliteBusyTimeout = ".timeout 5000";
+
+function defaultDbPath() {
+  if (process.env.DATABASE_PATH) return process.env.DATABASE_PATH;
+  const home = process.env.HOME || "/tmp";
+  return join(home, "Library/Application Support/com.recording-dashboard.app/data/recording-dashboard.sqlite");
+}
 
 export function sqlValue(value) {
   if (value === null || value === undefined) return "NULL";
@@ -14,7 +20,7 @@ export function sqlValue(value) {
 }
 
 export class Database {
-  constructor(filePath = process.env.DATABASE_PATH ?? "data/recording-dashboard.sqlite") {
+  constructor(filePath = defaultDbPath()) {
     this.filePath = filePath;
   }
 

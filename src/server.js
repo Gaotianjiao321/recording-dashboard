@@ -150,9 +150,15 @@ async function createManualTask(db, input) {
   `);
 }
 
+function defaultRecordingsDir() {
+  if (process.env.RECORDINGS_DIR) return process.env.RECORDINGS_DIR;
+  const home = process.env.HOME || "/tmp";
+  return join(home, "Library/Application Support/com.recording-dashboard.app/recordings");
+}
+
 export async function createApp(options = {}) {
   const db = options.db ?? new Database(options.dbPath);
-  const uploadDir = options.uploadDir ?? process.env.RECORDINGS_DIR ?? "recordings";
+  const uploadDir = options.uploadDir ?? defaultRecordingsDir();
   await db.init();
 
   return async function app(request, response) {
