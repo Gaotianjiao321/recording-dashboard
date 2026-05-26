@@ -125,6 +125,7 @@ function renderBoard(data, filter) {
   const inProgressTasks = tasks.filter((task) => task.status === "in_progress");
   const doneTasks = tasks.filter((task) => task.status === "done");
   const processingRecordings = recordings.filter((recording) => recording.status === "processing");
+  const failedRecordings = recordings.filter((recording) => recording.status === "failed");
 
   setText(selectors.pendingCount, pendingTasks.length);
   setText(selectors.processingCount, inProgressTasks.length + processingRecordings.length);
@@ -133,7 +134,11 @@ function renderBoard(data, filter) {
   renderCards(selectors.pendingColumn, pendingTasks.map(createTaskCard), "暂无待办任务。");
   renderCards(
     selectors.processingColumn,
-    [...inProgressTasks.map(createTaskCard), ...processingRecordings.map(createProcessingCard)],
+    [
+      ...inProgressTasks.map(createTaskCard),
+      ...processingRecordings.map(createProcessingCard),
+      ...failedRecordings.map(createFailedCard),
+    ],
     "暂无进行中的任务或录音。"
   );
   renderCards(
@@ -254,6 +259,19 @@ function createProcessingCard(recording) {
     avatar: "进",
     points: formatDuration(recording.duration_seconds),
     status: "解析中，请稍候..."
+  };
+}
+
+function createFailedCard(recording) {
+  return {
+    tag: "失败",
+    tagIcon: "⚠️",
+    tagClass: "tag-failed",
+    title: recordingTitle(recording, "录音解析失败"),
+    meta: `录音 #${recording.id}`,
+    avatar: "败",
+    points: formatDuration(recording.duration_seconds),
+    status: recording.error || "解析过程中出错，请重试。"
   };
 }
 

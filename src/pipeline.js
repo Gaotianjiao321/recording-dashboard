@@ -133,16 +133,26 @@ export async function processRecording(db, recordingPath, services = {}) {
       SET status = 'failed', error = ${sqlValue(error.message)}, updated_at = CURRENT_TIMESTAMP
       WHERE id = ${sqlValue(jobId)};
     `);
+    if (notifier) {
+      await notifyAndRecord(
+        db,
+        recordingId,
+        { title: "解析失败", body: `录音解析失败：${error.message}` },
+        notifier
+      ).catch(() => {});
+    }
     throw error;
   }
 }
 
 export async function getTodayDashboard(db) {
   const recordings = await db.all(`
-    SELECT id, file_path, duration_seconds, status, source_type, created_at
-    FROM recordings
-    WHERE source_type != 'manual'
-    ORDER BY id DESC
+    SELECT r.id, r.file_path, r.duration_seconds, r.status, r.source_type, r.created_at,
+           pj.error
+    FROM recordings r
+    LEFT JOIN processing_jobs pj ON pj.recording_id = r.id AND pj.status = 'failed'
+    WHERE r.source_type != 'manual'
+    ORDER BY r.id DESC
   `);
 
   const latest = await db.get(`

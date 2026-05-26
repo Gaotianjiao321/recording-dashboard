@@ -341,6 +341,11 @@ h1 {
   border-color: rgba(44, 138, 79, 0.15);
 }
 
+.kanban-card.card-failed {
+  background-color: #fef2f2; /* Light red */
+  border-color: rgba(214, 51, 108, 0.2);
+}
+
 .kanban-card:hover {
   border-color: rgba(91, 61, 240, 0.58);
   box-shadow: 0 14px 32px rgba(91, 61, 240, 0.11);
@@ -372,6 +377,11 @@ h1 {
 .tag-done {
   background: rgba(44, 138, 79, 0.13);
   color: var(--green);
+}
+
+.tag-failed {
+  background: rgba(214, 51, 108, 0.12);
+  color: var(--pink);
 }
 
 .tag-note {
@@ -487,6 +497,10 @@ h1 {
 
 .kanban-card.card-done .avatar {
   background: var(--green);
+}
+
+.kanban-card.card-failed .avatar {
+  background: var(--pink);
 }
 
 .points {
