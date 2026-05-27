@@ -1,5 +1,6 @@
 mod recording;
 
+use std::io::Write;
 use std::process::{Child, Command};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -84,19 +85,33 @@ fn find_node() -> String {
             return path.to_string();
         }
     }
-    // Try resolving via user shell (picks up nvm/volta/fnm)
+    // Try resolving via login shell (picks up nvm/volta/fnm/homebrew)
+    // Use `zsh -l -c` to simulate a login shell that sources all profile files.
+    if let Ok(output) = std::process::Command::new("/bin/zsh")
+        .args(["-l", "-c", "which node"])
+        .output()
+    {
+        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !path.is_empty() && std::path::Path::new(&path).exists() {
+            return path;
+        }
+    }
+    // Fallback: try explicit nvm default
     if let Ok(home) = std::env::var("HOME") {
-        let shell_cmd = format!(
-            "source {}/.zshrc 2>/dev/null || source {}/.bash_profile 2>/dev/null; which node",
-            home, home
-        );
-        if let Ok(output) = std::process::Command::new("/bin/zsh")
-            .args(["-c", &shell_cmd])
-            .output()
-        {
-            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !path.is_empty() && std::path::Path::new(&path).exists() {
-                return path;
+        let nvm_default = format!("{}/.nvm/versions/node/v25.2.1/bin/node", home);
+        if std::path::Path::new(&nvm_default).exists() {
+            return nvm_default;
+        }
+        // Try scanning nvm versions directory for any installed node
+        let nvm_dir = format!("{}/.nvm/versions/node", home);
+        if let Ok(entries) = std::fs::read_dir(&nvm_dir) {
+            let mut versions: Vec<_> = entries
+                .filter_map(|e| e.ok())
+                .filter(|e| e.path().join("bin/node").exists())
+                .collect();
+            versions.sort_by(|a, b| b.file_name().cmp(&a.file_name())); // newest first
+            if let Some(latest) = versions.first() {
+                return latest.path().join("bin/node").to_string_lossy().into_owned();
             }
         }
     }
@@ -107,6 +122,23 @@ fn app_support_dir() -> std::path::PathBuf {
     let home = std::env::var("HOME").map(std::path::PathBuf::from)
         .unwrap_or_else(|_| std::path::PathBuf::from("/tmp"));
     home.join("Library/Application Support/com.recording-dashboard.app")
+}
+
+fn sidecar_log_path() -> std::path::PathBuf {
+    app_support_dir().join("sidecar.log")
+}
+
+/// Write a diagnostic line to sidecar.log. Always succeeds (falls back to /tmp).
+fn log_to_file(msg: &str) {
+    let path = sidecar_log_path();
+    let _ = std::fs::create_dir_all(path.parent().unwrap_or(std::path::Path::new("/tmp")));
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+        let _ = writeln!(f, "{}", msg);
+    } else if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true)
+        .open("/tmp/recording-dashboard-sidecar.log")
+    {
+        let _ = writeln!(f, "{}", msg);
+    }
 }
 
 fn spawn_sidecar(app_root: &std::path::Path) -> Option<Child> {
@@ -123,24 +155,41 @@ fn spawn_sidecar(app_root: &std::path::Path) -> Option<Child> {
 
     let node_path = find_node();
 
-    // Redirect stderr to sidecar.log in Application Support (writable location)
-    let support_dir = app_support_dir();
-    let _ = std::fs::create_dir_all(&support_dir);
-    let log_path = support_dir.join("sidecar.log");
+    // Write diagnostics directly to log file (eprintln is invisible in .app context)
+    log_to_file(&format!("=== sidecar spawn attempt ==="));
+    log_to_file(&format!("node binary: {}", node_path));
+    log_to_file(&format!("script: {}", script_path));
+    log_to_file(&format!("cwd: {}", cwd.display()));
+    log_to_file(&format!("app_root: {}", app_root.display()));
+    log_to_file(&format!("src/index.js exists: {}", src_index.exists()));
+    log_to_file(&format!("node binary exists: {}", std::path::Path::new(&node_path).exists()));
+
+    // Open log file for child's stderr
+    let log_path = sidecar_log_path();
     let log_file = std::fs::OpenOptions::new()
         .create(true).append(true).open(&log_path)
-        .unwrap_or_else(|_| std::fs::File::create("/tmp/recording-dashboard-sidecar.log").unwrap());
+        .unwrap_or_else(|e| {
+            log_to_file(&format!("WARN: cannot open {}, falling back to /tmp: {}", log_path.display(), e));
+            std::fs::File::create("/tmp/recording-dashboard-sidecar.log").unwrap()
+        });
 
-    eprintln!("[sidecar] node={} script={} cwd={} log={}", node_path, script_path, cwd.display(), log_path.display());
-
-    Command::new(&node_path)
+    match Command::new(&node_path)
         .arg(&script_path)
         .current_dir(&cwd)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::null())
         .stderr(log_file)
         .spawn()
-        .ok()
+    {
+        Ok(child) => {
+            log_to_file(&format!("sidecar spawned OK, pid={}", child.id()));
+            Some(child)
+        }
+        Err(e) => {
+            log_to_file(&format!("sidecar spawn FAILED: {}", e));
+            None
+        }
+    }
 }
 
 fn wait_for_health(port: u16, max_attempts: u32) -> bool {
@@ -161,13 +210,14 @@ fn start_sidecar_manager(app: &tauri::App) {
         .unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
 
     if is_port_in_use(SIDECAR_PORT) {
+        log_to_file("sidecar port already in use, skipping spawn");
         return;
     }
 
     let child = match spawn_sidecar(&app_root) {
         Some(c) => Arc::new(Mutex::new(Some(c))),
         None => {
-            eprintln!("[sidecar] ERROR: spawn_sidecar returned None — node binary not found or spawn failed");
+            log_to_file("ERROR: spawn_sidecar returned None");
             send_notification(
                 handle.clone(),
                 "后端启动失败".into(),
@@ -178,9 +228,9 @@ fn start_sidecar_manager(app: &tauri::App) {
     };
 
     if !wait_for_health(SIDECAR_PORT, 20) {
-        let log_path = app_support_dir().join("sidecar.log");
+        let log_path = sidecar_log_path();
         let log_hint = format!("查看日志: {}", log_path.display());
-        eprintln!("[sidecar] ERROR: health check failed after 10s. {}", log_hint);
+        log_to_file(&format!("ERROR: health check failed after 10s. {}", log_hint));
         send_notification(
             handle.clone(),
             "后端启动失败".into(),
