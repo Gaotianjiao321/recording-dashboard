@@ -103,6 +103,12 @@ fn find_node() -> String {
     "node".to_string()
 }
 
+fn app_support_dir() -> std::path::PathBuf {
+    let home = std::env::var("HOME").map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from("/tmp"));
+    home.join("Library/Application Support/com.recording-dashboard.app")
+}
+
 fn spawn_sidecar(app_root: &std::path::Path) -> Option<Child> {
     // In production (DMG), app_root is the Resources dir inside .app bundle.
     // In dev, it's the project root. Check for src/index.js to confirm.
@@ -117,12 +123,22 @@ fn spawn_sidecar(app_root: &std::path::Path) -> Option<Child> {
 
     let node_path = find_node();
 
+    // Redirect stderr to sidecar.log in Application Support (writable location)
+    let support_dir = app_support_dir();
+    let _ = std::fs::create_dir_all(&support_dir);
+    let log_path = support_dir.join("sidecar.log");
+    let log_file = std::fs::OpenOptions::new()
+        .create(true).append(true).open(&log_path)
+        .unwrap_or_else(|_| std::fs::File::create("/tmp/recording-dashboard-sidecar.log").unwrap());
+
+    eprintln!("[sidecar] node={} script={} cwd={} log={}", node_path, script_path, cwd.display(), log_path.display());
+
     Command::new(&node_path)
         .arg(&script_path)
         .current_dir(&cwd)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
+        .stderr(log_file)
         .spawn()
         .ok()
 }
@@ -150,14 +166,25 @@ fn start_sidecar_manager(app: &tauri::App) {
 
     let child = match spawn_sidecar(&app_root) {
         Some(c) => Arc::new(Mutex::new(Some(c))),
-        None => return,
+        None => {
+            eprintln!("[sidecar] ERROR: spawn_sidecar returned None — node binary not found or spawn failed");
+            send_notification(
+                handle.clone(),
+                "后端启动失败".into(),
+                format!("无法启动 Node.js，请确认已安装 Node.js 22+。路径: {}", app_root.display()),
+            );
+            return;
+        }
     };
 
     if !wait_for_health(SIDECAR_PORT, 20) {
+        let log_path = app_support_dir().join("sidecar.log");
+        let log_hint = format!("查看日志: {}", log_path.display());
+        eprintln!("[sidecar] ERROR: health check failed after 10s. {}", log_hint);
         send_notification(
             handle.clone(),
             "后端启动失败".into(),
-            "Node.js 后端无法启动，请检查日志。".into(),
+            format!("Node.js 后端无法启动。{}", log_hint),
         );
         return;
     }
