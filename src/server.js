@@ -91,7 +91,12 @@ async function saveUploadedRecording(request, contentType, uploadDir) {
 }
 
 function sendJson(response, status, payload) {
-  response.writeHead(status, { "content-type": "application/json" });
+  response.writeHead(status, {
+    "content-type": "application/json",
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET, POST, PATCH, PUT, DELETE, OPTIONS",
+    "access-control-allow-headers": "content-type"
+  });
   response.end(JSON.stringify(payload));
 }
 
@@ -102,7 +107,10 @@ async function serveStatic(request, response) {
   try {
     const s = await stat(filePath);
     if (s.isDirectory()) throw new Error("not a file");
-    response.writeHead(200, { "content-type": contentTypes[extname(filePath)] ?? "application/octet-stream" });
+    response.writeHead(200, {
+      "content-type": contentTypes[extname(filePath)] ?? "application/octet-stream",
+      "access-control-allow-origin": "*"
+    });
     createReadStream(filePath).pipe(response);
   } catch (error) {
     if (error.code === "ENOENT" || error.message === "not a file") {
@@ -164,6 +172,15 @@ export async function createApp(options = {}) {
   return async function app(request, response) {
     try {
       const url = new URL(request.url, "http://localhost");
+
+      if (request.method === "OPTIONS") {
+        response.writeHead(204, {
+          "access-control-allow-origin": "*",
+          "access-control-allow-methods": "GET, POST, PATCH, PUT, DELETE, OPTIONS",
+          "access-control-allow-headers": "content-type"
+        });
+        return response.end();
+      }
 
       if (request.method === "GET" && url.pathname === "/api/health") {
         return sendJson(response, 200, { ok: true });
