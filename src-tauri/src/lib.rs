@@ -124,22 +124,46 @@ fn spawn_sidecar(app_root: &std::path::Path) -> Option<Child> {
     let node_path = find_node();
 
     // Discover the full shell PATH on macOS to ensure binaries like ffmpeg and sqlite3 can be found.
-    let mut env_path = std::env::var("PATH").unwrap_or_default();
+    // GUI apps often have a minimal PATH. We prepend common locations and then try to pull from the user shell.
+    let mut paths = vec![
+        "/opt/homebrew/bin".to_string(),
+        "/usr/local/bin".to_string(),
+        "/usr/bin".to_string(),
+        "/bin".to_string(),
+        "/usr/sbin".to_string(),
+        "/sbin".to_string(),
+    ];
+    
+    if let Ok(existing_path) = std::env::var("PATH") {
+        for p in existing_path.split(':') {
+            if !paths.contains(&p.to_string()) {
+                paths.push(p.to_string());
+            }
+        }
+    }
+
     if let Ok(home) = std::env::var("HOME") {
+        // Try sourcing multiple profiles to pick up path changes (homebrew, nvm, etc.)
         let shell_cmd = format!(
-            "source {}/.zshrc 2>/dev/null || source {}/.bash_profile 2>/dev/null; echo $PATH",
-            home, home
+            "source {0}/.zprofile 2>/dev/null; source {0}/.zshrc 2>/dev/null; source {0}/.bash_profile 2>/dev/null; echo $PATH",
+            home
         );
         if let Ok(output) = std::process::Command::new("/bin/zsh")
             .args(["-c", &shell_cmd])
             .output()
         {
-            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !path.is_empty() {
-                env_path = path;
+            let shell_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !shell_path.is_empty() {
+                for p in shell_path.split(':') {
+                    if !paths.contains(&p.to_string()) {
+                        paths.push(p.to_string());
+                    }
+                }
             }
         }
     }
+    
+    let env_path = paths.join(":");
 
     // Redirect stderr to sidecar.log in Application Support (writable location)
     let support_dir = app_support_dir();
@@ -148,6 +172,19 @@ fn spawn_sidecar(app_root: &std::path::Path) -> Option<Child> {
     let log_file = std::fs::OpenOptions::new()
         .create(true).append(true).open(&log_path)
         .unwrap_or_else(|_| std::fs::File::create("/tmp/recording-dashboard-sidecar.log").unwrap());
+
+    // Write diagnostic header to log
+    use std::io::Write;
+    if let Ok(mut f) = log_file.try_clone() {
+        let _ = writeln!(f, "\n=== sidecar spawn attempt at {} ===", Local::now());
+        let _ = writeln!(f, "node: {}", node_path);
+        let _ = writeln!(f, "script: {}", script_path);
+        let _ = writeln!(f, "cwd: {}", cwd.display());
+        let _ = writeln!(f, "PATH: {}", env_path);
+        if let Ok(home) = std::env::var("HOME") {
+            let _ = writeln!(f, "HOME: {}", home);
+        }
+    }
 
     eprintln!("[sidecar] node={} script={} cwd={} log={} path={}", node_path, script_path, cwd.display(), log_path.display(), env_path);
 
