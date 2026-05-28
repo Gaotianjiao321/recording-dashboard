@@ -135,25 +135,46 @@ export class Database {
   }
 
   async exec(sql) {
-    await execFileAsync(SQLITE_BIN, ["-cmd", sqliteBusyTimeout, this.filePath, sql], { maxBuffer: 1024 * 1024 * 8 });
+    try {
+      await execFileAsync(SQLITE_BIN, ["-cmd", sqliteBusyTimeout, this.filePath, sql], { maxBuffer: 1024 * 1024 * 8 });
+    } catch (error) {
+      console.error(`[db] exec failed: ${error.message}`);
+      console.error(`[db] command: ${error.cmd}`);
+      console.error(`[db] SQL: ${sql.slice(0, 500)}`);
+      throw error;
+    }
   }
 
   async run(sql) {
-    const { stdout } = await execFileAsync(
-      SQLITE_BIN,
-      ["-json", "-cmd", sqliteBusyTimeout, this.filePath, `${sql}; SELECT last_insert_rowid() AS id;`],
-      { maxBuffer: 1024 * 1024 * 8 }
-    );
-    const rows = stdout.trim() ? JSON.parse(stdout) : [];
-    const row = rows.at(-1);
-    return row?.id;
+    try {
+      const { stdout } = await execFileAsync(
+        SQLITE_BIN,
+        ["-json", "-cmd", sqliteBusyTimeout, this.filePath, `${sql}; SELECT last_insert_rowid() AS id;`],
+        { maxBuffer: 1024 * 1024 * 8 }
+      );
+      const rows = stdout.trim() ? JSON.parse(stdout) : [];
+      const row = rows.at(-1);
+      return row?.id;
+    } catch (error) {
+      console.error(`[db] run failed: ${error.message}`);
+      console.error(`[db] command: ${error.cmd}`);
+      console.error(`[db] SQL: ${sql.slice(0, 500)}`);
+      throw error;
+    }
   }
 
   async all(sql) {
-    const { stdout } = await execFileAsync(SQLITE_BIN, ["-json", "-cmd", sqliteBusyTimeout, this.filePath, sql], {
-      maxBuffer: 1024 * 1024 * 8
-    });
-    return stdout.trim() ? JSON.parse(stdout) : [];
+    try {
+      const { stdout } = await execFileAsync(SQLITE_BIN, ["-json", "-cmd", sqliteBusyTimeout, this.filePath, sql], {
+        maxBuffer: 1024 * 1024 * 8
+      });
+      return stdout.trim() ? JSON.parse(stdout) : [];
+    } catch (error) {
+      console.error(`[db] all failed: ${error.message}`);
+      console.error(`[db] command: ${error.cmd}`);
+      console.error(`[db] SQL: ${sql.slice(0, 500)}`);
+      throw error;
+    }
   }
 
   async get(sql) {
