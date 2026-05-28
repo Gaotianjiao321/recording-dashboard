@@ -259,7 +259,8 @@ export async function createApp(options = {}) {
 
       sendJson(response, 404, { error: "not found" });
     } catch (error) {
-      if (error.code === "ENOENT") return sendJson(response, 404, { error: "not found" });
+      // Only map ENOENT to 404 if it's NOT from a child process (which would indicate a missing binary)
+      if (error.code === "ENOENT" && !error.cmd) return sendJson(response, 404, { error: "not found" });
       sendJson(response, 500, { error: error.message });
     }
   };

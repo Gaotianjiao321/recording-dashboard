@@ -1,26 +1,46 @@
-import { execFile } from "node:child_process";
+import { execFile, execSync } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
-import { accessSync, constants } from "node:fs";
+import { accessSync, constants, existsSync } from "node:fs";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
 // GUI apps on macOS don't inherit shell PATH (homebrew, nvm, etc.)
-function findBinary(name, envVar) {
-  if (process.env[envVar]) return process.env[envVar];
+export function findBinary(name, envVar) {
+  if (envVar && process.env[envVar]) return process.env[envVar];
   const candidates = [
     `/opt/homebrew/bin/${name}`,
     `/usr/local/bin/${name}`,
+    `/usr/bin/${name}`,
+    `/bin/${name}`,
   ];
   for (const path of candidates) {
-    try { accessSync(path, constants.X_OK); return path; } catch {}
+    try {
+      accessSync(path, constants.X_OK);
+      return path;
+    } catch {}
   }
+
+  // Try resolving via user shell (picks up homebrew, custom paths)
+  if (process.platform === "darwin") {
+    try {
+      const home = process.env.HOME;
+      if (home) {
+        const shellCmd = `source ${home}/.zshrc 2>/dev/null || source ${home}/.bash_profile 2>/dev/null; which ${name}`;
+        const path = execSync(shellCmd, { shell: "/bin/zsh", timeout: 3000 }).toString().trim();
+        if (path && existsSync(path)) return path;
+      }
+    } catch {}
+  }
+
   return name;
 }
 
 const FFPROBE_BIN = findBinary("ffprobe", "FFPROBE_BIN");
 const FFMPEG_BIN = findBinary("ffmpeg", "FFMPEG_BIN");
+
+console.log(`[audio] Resolved binaries: ffmpeg=${FFMPEG_BIN}, ffprobe=${FFPROBE_BIN}`);
 
 export async function getAudioDurationSeconds(filePath) {
   const { stdout } = await execFileAsync(FFPROBE_BIN, [

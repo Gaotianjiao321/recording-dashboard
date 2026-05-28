@@ -123,6 +123,24 @@ fn spawn_sidecar(app_root: &std::path::Path) -> Option<Child> {
 
     let node_path = find_node();
 
+    // Discover the full shell PATH on macOS to ensure binaries like ffmpeg and sqlite3 can be found.
+    let mut env_path = std::env::var("PATH").unwrap_or_default();
+    if let Ok(home) = std::env::var("HOME") {
+        let shell_cmd = format!(
+            "source {}/.zshrc 2>/dev/null || source {}/.bash_profile 2>/dev/null; echo $PATH",
+            home, home
+        );
+        if let Ok(output) = std::process::Command::new("/bin/zsh")
+            .args(["-c", &shell_cmd])
+            .output()
+        {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !path.is_empty() {
+                env_path = path;
+            }
+        }
+    }
+
     // Redirect stderr to sidecar.log in Application Support (writable location)
     let support_dir = app_support_dir();
     let _ = std::fs::create_dir_all(&support_dir);
@@ -131,13 +149,16 @@ fn spawn_sidecar(app_root: &std::path::Path) -> Option<Child> {
         .create(true).append(true).open(&log_path)
         .unwrap_or_else(|_| std::fs::File::create("/tmp/recording-dashboard-sidecar.log").unwrap());
 
-    eprintln!("[sidecar] node={} script={} cwd={} log={}", node_path, script_path, cwd.display(), log_path.display());
+    eprintln!("[sidecar] node={} script={} cwd={} log={} path={}", node_path, script_path, cwd.display(), log_path.display(), env_path);
+
+    let log_file_stdout = log_file.try_clone().ok().unwrap_or_else(|| std::fs::File::create("/tmp/recording-dashboard-sidecar-stdout.log").unwrap());
 
     Command::new(&node_path)
         .arg(&script_path)
         .current_dir(&cwd)
+        .env("PATH", env_path)
         .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::null())
+        .stdout(log_file_stdout)
         .stderr(log_file)
         .spawn()
         .ok()

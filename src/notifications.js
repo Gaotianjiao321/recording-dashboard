@@ -1,8 +1,10 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { sqlValue } from "./db.js";
+import { findBinary } from "./audio.js";
 
 const execFileAsync = promisify(execFile);
+const OSASCRIPT_BIN = findBinary("osascript");
 
 function osascriptEscape(value) {
   return String(value).replaceAll("\\", "\\\\").replaceAll('"', '\\"');
@@ -10,7 +12,7 @@ function osascriptEscape(value) {
 
 export async function sendMacNotification({ title, body }) {
   if (process.platform !== "darwin") return { delivered: false, reason: "not-macos" };
-  await execFileAsync("osascript", [
+  await execFileAsync(OSASCRIPT_BIN, [
     "-e",
     `display notification "${osascriptEscape(body)}" with title "${osascriptEscape(title)}"`
   ]);

@@ -2,9 +2,12 @@ import { execFile } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
+import { findBinary } from "./audio.js";
 
 const execFileAsync = promisify(execFile);
 const sqliteBusyTimeout = ".timeout 5000";
+const SQLITE_BIN = findBinary("sqlite3", "SQLITE_BIN");
+console.log(`[db] Resolved binary: sqlite3=${SQLITE_BIN}`);
 
 function defaultDbPath() {
   if (process.env.DATABASE_PATH) return process.env.DATABASE_PATH;
@@ -132,12 +135,12 @@ export class Database {
   }
 
   async exec(sql) {
-    await execFileAsync("sqlite3", ["-cmd", sqliteBusyTimeout, this.filePath, sql], { maxBuffer: 1024 * 1024 * 8 });
+    await execFileAsync(SQLITE_BIN, ["-cmd", sqliteBusyTimeout, this.filePath, sql], { maxBuffer: 1024 * 1024 * 8 });
   }
 
   async run(sql) {
     const { stdout } = await execFileAsync(
-      "sqlite3",
+      SQLITE_BIN,
       ["-json", "-cmd", sqliteBusyTimeout, this.filePath, `${sql}; SELECT last_insert_rowid() AS id;`],
       { maxBuffer: 1024 * 1024 * 8 }
     );
@@ -147,7 +150,7 @@ export class Database {
   }
 
   async all(sql) {
-    const { stdout } = await execFileAsync("sqlite3", ["-json", "-cmd", sqliteBusyTimeout, this.filePath, sql], {
+    const { stdout } = await execFileAsync(SQLITE_BIN, ["-json", "-cmd", sqliteBusyTimeout, this.filePath, sql], {
       maxBuffer: 1024 * 1024 * 8
     });
     return stdout.trim() ? JSON.parse(stdout) : [];

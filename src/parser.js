@@ -1,7 +1,9 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { findBinary } from "./audio.js";
 
 const execFileAsync = promisify(execFile);
+const HERMES_BIN = findBinary("hermes", "HERMES_COMMAND");
 
 const resultKeys = [
   "summary",
@@ -143,7 +145,7 @@ export function parseTranscriptHeuristically(transcript) {
 }
 
 async function runHermes(prompt, options = {}) {
-  const command = options.command ?? process.env.HERMES_COMMAND ?? "hermes";
+  const command = options.command ?? HERMES_BIN;
   const timeoutMs = Number(options.timeoutMs ?? process.env.HERMES_TIMEOUT_MS ?? 120000);
   const { stdout } = await execFileAsync(command, ["-z", prompt, "--ignore-rules"], {
     env: { ...process.env, NO_COLOR: "1" },
