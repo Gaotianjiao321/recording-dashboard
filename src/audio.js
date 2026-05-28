@@ -9,31 +9,41 @@ const execFileAsync = promisify(execFile);
 // GUI apps on macOS don't inherit shell PATH (homebrew, nvm, etc.)
 export function findBinary(name, envVar) {
   if (envVar && process.env[envVar]) return process.env[envVar];
+  
+  // Try common macOS locations first for absolute paths (more robust in GUI apps)
   const candidates = [
     `/opt/homebrew/bin/${name}`,
     `/usr/local/bin/${name}`,
     `/usr/bin/${name}`,
     `/bin/${name}`,
+    `/usr/sbin/${name}`,
+    `/sbin/${name}`,
   ];
   for (const path of candidates) {
     try {
       accessSync(path, constants.X_OK);
+      console.log(`[audio] Resolved ${name} via candidate: ${path}`);
       return path;
     } catch {}
   }
 
-  // Try resolving via user shell (picks up homebrew, custom paths)
+  // Try resolving via user shell (picks up homebrew, custom paths, nvm etc.)
   if (process.platform === "darwin") {
     try {
       const home = process.env.HOME;
       if (home) {
-        const shellCmd = `source ${home}/.zshrc 2>/dev/null || source ${home}/.bash_profile 2>/dev/null; which ${name}`;
+        // Source multiple profiles to find the binary
+        const shellCmd = `source ${home}/.zprofile 2>/dev/null; source ${home}/.zshrc 2>/dev/null; source ${home}/.bash_profile 2>/dev/null; which ${name}`;
         const path = execSync(shellCmd, { shell: "/bin/zsh", timeout: 3000 }).toString().trim();
-        if (path && existsSync(path)) return path;
+        if (path && existsSync(path)) {
+          console.log(`[audio] Resolved ${name} via shell: ${path}`);
+          return path;
+        }
       }
     } catch {}
   }
 
+  console.log(`[audio] Falling back to default name for ${name}`);
   return name;
 }
 
