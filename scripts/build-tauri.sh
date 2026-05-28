@@ -29,7 +29,7 @@ mkdir -p "$RESOURCES_DIR/recordings"
 echo "Rebuilding DMG..."
 rm -f "$TAURI_DIR/target/release/bundle/dmg/"Recording\ Dashboard_*.dmg
 hdiutil create -volname "Recording Dashboard" \
-  -srcfolder "$(dirname "$APP_DIR")" \
+  -srcfolder "$APP_DIR" \
   -ov -format UDZO \
   "$DMG_PATH"
 
